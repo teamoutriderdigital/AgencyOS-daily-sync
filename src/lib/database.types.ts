@@ -4,7 +4,7 @@ export type Json = string | number | boolean | null | { [key: string]: Json | un
 export type TeamMember = "Jack" | "Daniel" | "Leonardo" | "Rehan" | "Kas";
 export type L10Priority = "High" | "Medium" | "Low";
 export type IdsStatus = "Not started" | "Block" | "In progress" | "Solved";
-export type AttendanceStatus = "Present" | "Remote" | "Out";
+export type AttendanceStatus = "Present" | "Out";
 
 export interface Database {
   public: {

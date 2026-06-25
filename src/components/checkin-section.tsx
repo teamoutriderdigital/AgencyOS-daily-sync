@@ -13,10 +13,7 @@ import { SectionShell } from "./section-shell";
 // counts how many are attending (Present or Remote).
 export function CheckinSection({ checkins, date }: { checkins: DailyCheckin[]; date: string }) {
   const byMember = new Map(checkins.map((c) => [c.member, c.status]));
-  const present = OWNERS.filter((m) => {
-    const s = byMember.get(m);
-    return s === "Present" || s === "Remote";
-  }).length;
+  const present = OWNERS.filter((m) => byMember.get(m) === "Present").length;
 
   return (
     <SectionShell title="Check-in" count={present} countLabel={`of ${OWNERS.length} in`}>

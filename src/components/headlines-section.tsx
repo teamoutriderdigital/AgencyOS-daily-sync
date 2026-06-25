@@ -3,9 +3,23 @@
 import { useState, useTransition } from "react";
 import { cn } from "@/lib/utils";
 import { createHeadline, deleteHeadline, updateHeadline } from "@/lib/daily-actions";
-import type { DailyHeadline } from "@/lib/daily";
+import { CLIENTS, type DailyHeadline } from "@/lib/daily";
 import type { TeamMember } from "@/lib/database.types";
 import { SectionShell } from "./section-shell";
+
+const CLIENT_LIST_ID = "daily-client-options";
+
+// Shared <datalist> of common clients — referenced by every client input so
+// they autocomplete to Redstone / SBD / COD / Vital (free text still allowed).
+function ClientOptions() {
+  return (
+    <datalist id={CLIENT_LIST_ID}>
+      {CLIENTS.map((c) => (
+        <option key={c} value={c} />
+      ))}
+    </datalist>
+  );
+}
 
 // One line per client headline for the selected day. News, not discussion —
 // add / edit / delete inline, scoped to the date.
@@ -35,6 +49,7 @@ export function HeadlinesSection({
         </button>
       }
     >
+      <ClientOptions />
       <div className="divide-y divide-border/50">
         {headlines.length === 0 && !adding && (
           <p className="px-5 py-6 text-center text-xs italic text-text-muted">
@@ -80,6 +95,7 @@ function HeadlineRow({ headline }: { headline: DailyHeadline }) {
           value={client}
           onChange={(e) => setClient(e.target.value)}
           placeholder="Client"
+          list={CLIENT_LIST_ID}
           className="w-40 flex-shrink-0 rounded-md border border-border bg-surface px-2 py-1 text-xs text-text"
         />
         <input

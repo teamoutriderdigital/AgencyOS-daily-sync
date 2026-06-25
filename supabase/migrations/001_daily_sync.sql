@@ -29,7 +29,7 @@ exception when duplicate_object then null;
 end $$;
 
 do $$ begin
-  create type attendance_status as enum ('Present', 'Remote', 'Out');
+  create type attendance_status as enum ('Present', 'Out');
 exception when duplicate_object then null;
 end $$;
 
