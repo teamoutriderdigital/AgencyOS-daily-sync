@@ -28,6 +28,11 @@ do $$ begin
 exception when duplicate_object then null;
 end $$;
 
+do $$ begin
+  create type attendance_status as enum ('Present', 'Remote', 'Out');
+exception when duplicate_object then null;
+end $$;
+
 -- ─── updated_at trigger function ────────────────────────────────────────────
 
 create or replace function touch_updated_at()
@@ -78,13 +83,15 @@ create index if not exists ids_items_owner_idx on ids_items(owner);
 create index if not exists ids_items_due_idx on ids_items(due_date);
 
 -- ─── daily_checkins ─────────────────────────────────────────────────────────
--- One one-line mood/note per (day, member). Editing upserts on the unique
--- constraint; it never inserts a duplicate.
+-- Attendance per (day, member): status = Present / Remote / Out (null = not
+-- marked yet). `mood` is an optional one-line note kept for future use. Editing
+-- upserts on the unique constraint; it never inserts a duplicate.
 
 create table if not exists daily_checkins (
   id serial primary key,
   checkin_date date not null,
   member team_member not null,
+  status attendance_status,
   mood text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),

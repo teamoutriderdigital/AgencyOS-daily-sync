@@ -160,7 +160,7 @@ export function DailyBoard({ initialSnapshot, today }: Props) {
   // Render the four sections from the single AGENDA_ORDER constant (see daily.ts
   // — flipping IDS/to-dos order is a one-line change there).
   const sections: Record<(typeof AGENDA_ORDER)[number], React.ReactNode> = {
-    checkin: <CheckinSection key="checkin" checkins={checkins} date={date} currentMember={currentMember} />,
+    checkin: <CheckinSection key="checkin" checkins={checkins} date={date} />,
     headlines: (
       <HeadlinesSection key="headlines" headlines={headlines} date={date} currentMember={currentMember} />
     ),

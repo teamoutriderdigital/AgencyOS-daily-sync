@@ -2,27 +2,28 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "./supabase-server";
-import type { TeamMember } from "./database.types";
+import type { AttendanceStatus, TeamMember } from "./database.types";
 
 function revalidateDaily() {
   revalidatePath("/daily");
 }
 
-// ─── Check-ins ─────────────────────────────────────────────────────────────
-// Upsert keyed by (checkin_date, member). Editing a check-in overwrites the
-// existing row rather than inserting a duplicate.
+// ─── Attendance ──────────────────────────────────────────────────────────────
+// Mark a member Present / Remote / Out (or null to clear) for a given day.
+// Upsert keyed by (checkin_date, member) so it overwrites rather than
+// duplicating. Only `status` is written, so any future `mood` note is untouched.
 
-export async function upsertCheckin(input: {
+export async function setAttendance(input: {
   checkin_date: string;
   member: TeamMember;
-  mood: string | null;
+  status: AttendanceStatus | null;
 }) {
   const supabase = createClient();
   const { error } = await supabase.from("daily_checkins").upsert(
     {
       checkin_date: input.checkin_date,
       member: input.member,
-      mood: input.mood?.trim() || null
+      status: input.status
     },
     { onConflict: "checkin_date,member" }
   );

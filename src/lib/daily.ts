@@ -1,7 +1,23 @@
-import type { Tables } from "./database.types";
+import type { AttendanceStatus, Tables } from "./database.types";
 
 export type DailyCheckin = Tables<"daily_checkins">;
 export type DailyHeadline = Tables<"daily_headlines">;
+
+// Attendance options for the daily check-in. "Present" and "Remote" both count
+// as attending; "Out" does not.
+export const ATTENDANCE_STATUSES: AttendanceStatus[] = ["Present", "Remote", "Out"];
+
+export function attendanceClasses(status: AttendanceStatus, active: boolean): string {
+  if (!active) return "border-border bg-surface text-text-muted hover:bg-surface-alt";
+  switch (status) {
+    case "Present":
+      return "border-green-200 bg-green-50 text-green-700";
+    case "Remote":
+      return "border-blue-200 bg-blue-50 text-blue-700";
+    case "Out":
+      return "border-red-200 bg-red-50 text-red-700";
+  }
+}
 
 // ─── Agenda order ───────────────────────────────────────────────────────────
 // The four daily sections render from this single constant. The current team
