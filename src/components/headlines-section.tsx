@@ -3,23 +3,13 @@
 import { useState, useTransition } from "react";
 import { cn } from "@/lib/utils";
 import { createHeadline, deleteHeadline, updateHeadline } from "@/lib/daily-actions";
-import { CLIENTS, type DailyHeadline } from "@/lib/daily";
+import type { DailyHeadline } from "@/lib/daily";
 import type { TeamMember } from "@/lib/database.types";
 import { SectionShell } from "./section-shell";
+import { ClientPicker } from "./client-picker";
 
-const CLIENT_LIST_ID = "daily-client-options";
-
-// Shared <datalist> of common clients — referenced by every client input so
-// they autocomplete to Redstone / SBD / COD / Vital (free text still allowed).
-function ClientOptions() {
-  return (
-    <datalist id={CLIENT_LIST_ID}>
-      {CLIENTS.map((c) => (
-        <option key={c} value={c} />
-      ))}
-    </datalist>
-  );
-}
+const CLIENT_FIELD_CLASS =
+  "w-40 flex-shrink-0 rounded-md border border-border bg-surface px-2 py-1 text-xs text-text";
 
 // One line per client headline for the selected day. News, not discussion —
 // add / edit / delete inline, scoped to the date.
@@ -49,7 +39,6 @@ export function HeadlinesSection({
         </button>
       }
     >
-      <ClientOptions />
       <div className="divide-y divide-border/50">
         {headlines.length === 0 && !adding && (
           <p className="px-5 py-6 text-center text-xs italic text-text-muted">
@@ -90,13 +79,10 @@ function HeadlineRow({ headline }: { headline: DailyHeadline }) {
   if (editing) {
     return (
       <div className="flex items-center gap-2 bg-surface-alt/30 px-5 py-2.5">
-        <input
-          type="text"
-          value={client}
-          onChange={(e) => setClient(e.target.value)}
-          placeholder="Client"
-          list={CLIENT_LIST_ID}
-          className="w-40 flex-shrink-0 rounded-md border border-border bg-surface px-2 py-1 text-xs text-text"
+        <ClientPicker
+          value={client || null}
+          onChange={(v) => setClient(v ?? "")}
+          className={CLIENT_FIELD_CLASS}
         />
         <input
           type="text"
