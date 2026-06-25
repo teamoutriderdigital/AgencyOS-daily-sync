@@ -1,5 +1,5 @@
 import { DailyBoard } from "@/components/daily-board";
-import { getDailySnapshot } from "@/lib/daily-server";
+import { getDailySnapshot, getKnownClients } from "@/lib/daily-server";
 import { todayLocalISO } from "@/lib/l10";
 
 export const dynamic = "force-dynamic";
@@ -14,6 +14,6 @@ export default async function DailyPage({
   const today = todayLocalISO();
   const requested = searchParams.date;
   const date = requested && /^\d{4}-\d{2}-\d{2}$/.test(requested) ? requested : today;
-  const snapshot = await getDailySnapshot(date);
-  return <DailyBoard initialSnapshot={snapshot} today={today} />;
+  const [snapshot, knownClients] = await Promise.all([getDailySnapshot(date), getKnownClients()]);
+  return <DailyBoard initialSnapshot={snapshot} today={today} knownClients={knownClients} />;
 }

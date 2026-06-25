@@ -67,6 +67,30 @@ async function loadSnapshot(date: string): Promise<DailySnapshot> {
   };
 }
 
+// Every distinct client ever used in a headline, so they persist as default
+// chips for everyone. Degrades to an empty list when Supabase isn't configured.
+export async function getKnownClients(): Promise<string[]> {
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+    return [];
+  }
+  try {
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .from("daily_headlines")
+      .select("client")
+      .not("client", "is", null);
+    if (error) throw new Error(error.message);
+    const set = new Set<string>();
+    for (const row of data ?? []) {
+      if (row.client) set.add(row.client);
+    }
+    return [...set].sort((a, b) => a.localeCompare(b));
+  } catch (e) {
+    console.error("getKnownClients failed:", e);
+    return [];
+  }
+}
+
 // Headlines for a single date — used by the dashboard's "today's headlines"
 // panel. Degrades to an empty list when Supabase isn't configured.
 export async function getHeadlines(date: string): Promise<DailyHeadline[]> {

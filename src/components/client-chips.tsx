@@ -1,21 +1,39 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
 import { CLIENTS } from "@/lib/daily";
 
-// Always-visible client selector: the default clients (Redstone, SBD, COD,
-// Vital) as toggle buttons, plus "+ Other" to type any custom client. The
-// selected client is highlighted; click it again to clear.
+// Always-visible client selector: the base defaults (Redstone, SBD, COD, Vital)
+// plus any client already used before (`known`), all as toggle buttons, plus
+// "+ Other" to type a brand-new one. Once a new client is used it persists in
+// the data and shows up here as a default next time. The selected client is
+// highlighted; click it again to clear.
 export function ClientChips({
   value,
-  onChange
+  onChange,
+  known = []
 }: {
   value: string | null;
   onChange: (v: string | null) => void;
+  known?: string[];
 }) {
   const [other, setOther] = useState(false);
-  const customValue = value && !CLIENTS.includes(value) ? value : null;
+
+  // Defaults first, then any previously-used clients, de-duplicated.
+  const options = useMemo(() => {
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const c of [...CLIENTS, ...known]) {
+      if (c && !seen.has(c)) {
+        seen.add(c);
+        out.push(c);
+      }
+    }
+    return out;
+  }, [known]);
+
+  const customValue = value && !options.includes(value) ? value : null;
 
   const chip = (active: boolean) =>
     cn(
@@ -28,7 +46,7 @@ export function ClientChips({
   return (
     <div className="flex flex-wrap items-center gap-1.5">
       <span className="text-xs font-medium text-text-muted">Client:</span>
-      {CLIENTS.map((c) => (
+      {options.map((c) => (
         <button
           key={c}
           type="button"

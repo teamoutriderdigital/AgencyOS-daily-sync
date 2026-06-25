@@ -19,13 +19,14 @@ const MEMBER_KEY = "daily-sync:member";
 type Props = {
   initialSnapshot: DailySnapshot;
   today: string;
+  knownClients: string[];
 };
 
 // The daily standup board. Check-ins and headlines are date-scoped (refetch +
 // resubscribe when the day changes); to-dos and IDS are live master state. All
 // four tables stream changes via Supabase realtime so two people in the board
 // during the sync see each other's edits within ~2s.
-export function DailyBoard({ initialSnapshot, today }: Props) {
+export function DailyBoard({ initialSnapshot, today, knownClients }: Props) {
   const supabase = useMemo(() => createClient(), []);
 
   const [date, setDate] = useState(initialSnapshot.date);
@@ -157,12 +158,26 @@ export function DailyBoard({ initialSnapshot, today }: Props) {
     };
   }, [supabase, date]);
 
+  // Known clients = all-time list from the server, plus any clients on the
+  // currently loaded headlines (so a just-added one shows as a chip live).
+  const clientOptions = useMemo(() => {
+    const set = new Set<string>(knownClients);
+    for (const h of headlines) if (h.client) set.add(h.client);
+    return [...set];
+  }, [knownClients, headlines]);
+
   // Render the four sections from the single AGENDA_ORDER constant (see daily.ts
   // — flipping IDS/to-dos order is a one-line change there).
   const sections: Record<(typeof AGENDA_ORDER)[number], React.ReactNode> = {
     checkin: <CheckinSection key="checkin" checkins={checkins} date={date} />,
     headlines: (
-      <HeadlinesSection key="headlines" headlines={headlines} date={date} currentMember={currentMember} />
+      <HeadlinesSection
+        key="headlines"
+        headlines={headlines}
+        date={date}
+        currentMember={currentMember}
+        clients={clientOptions}
+      />
     ),
     ids: <IdsSection key="ids" items={idsItems} />,
     todos: <ActionItemsSection key="todos" items={actionItems} />

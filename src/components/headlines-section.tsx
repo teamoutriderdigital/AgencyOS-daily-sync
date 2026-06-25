@@ -14,11 +14,13 @@ import { ClientChips } from "./client-chips";
 export function HeadlinesSection({
   headlines,
   date,
-  currentMember
+  currentMember,
+  clients = []
 }: {
   headlines: DailyHeadline[];
   date: string;
   currentMember: TeamMember | null;
+  clients?: string[];
 }) {
   const [adding, setAdding] = useState(false);
 
@@ -44,12 +46,13 @@ export function HeadlinesSection({
           </p>
         )}
         {headlines.map((h) => (
-          <HeadlineRow key={h.id} headline={h} />
+          <HeadlineRow key={h.id} headline={h} clients={clients} />
         ))}
         {adding && (
           <NewHeadlineRow
             date={date}
             currentMember={currentMember}
+            clients={clients}
             onCancel={() => setAdding(false)}
             onSaved={() => setAdding(false)}
           />
@@ -59,7 +62,7 @@ export function HeadlinesSection({
   );
 }
 
-function HeadlineRow({ headline }: { headline: DailyHeadline }) {
+function HeadlineRow({ headline, clients }: { headline: DailyHeadline; clients: string[] }) {
   const [editing, setEditing] = useState(false);
   const [client, setClient] = useState<string | null>(headline.client);
   const [text, setText] = useState(headline.text);
@@ -77,7 +80,7 @@ function HeadlineRow({ headline }: { headline: DailyHeadline }) {
   if (editing) {
     return (
       <div className="space-y-2 bg-surface-alt/30 px-5 py-3">
-        <ClientChips value={client} onChange={setClient} />
+        <ClientChips value={client} onChange={setClient} known={clients} />
         <div className="flex items-center gap-2">
           <input
             type="text"
@@ -148,11 +151,13 @@ function HeadlineRow({ headline }: { headline: DailyHeadline }) {
 function NewHeadlineRow({
   date,
   currentMember,
+  clients,
   onCancel,
   onSaved
 }: {
   date: string;
   currentMember: TeamMember | null;
+  clients: string[];
   onCancel: () => void;
   onSaved: () => void;
 }) {
@@ -176,7 +181,7 @@ function NewHeadlineRow({
 
   return (
     <div className="space-y-2 bg-surface-alt/30 px-5 py-3">
-      <ClientChips value={client} onChange={setClient} />
+      <ClientChips value={client} onChange={setClient} known={clients} />
       <div className="flex items-center gap-2">
         <input
           type="text"

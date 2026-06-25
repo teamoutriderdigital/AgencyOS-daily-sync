@@ -20,10 +20,12 @@ const MEMBER_KEY = "daily-sync:member";
 export function DashboardBoard({
   initialItems,
   initialHeadlines,
+  knownClients,
   today
 }: {
   initialItems: ActionItem[];
   initialHeadlines: DailyHeadline[];
+  knownClients: string[];
   today: string;
 }) {
   const supabase = useMemo(() => createClient(), []);
@@ -88,6 +90,12 @@ export function DashboardBoard({
     };
   }, [supabase, today]);
 
+  const clientOptions = useMemo(() => {
+    const set = new Set<string>(knownClients);
+    for (const h of headlines) if (h.client) set.add(h.client);
+    return [...set];
+  }, [knownClients, headlines]);
+
   return (
     <div className="mx-auto max-w-7xl space-y-6 px-4 py-8">
       <div>
@@ -100,7 +108,12 @@ export function DashboardBoard({
 
       <DailySyncLauncher today={today} />
 
-      <HeadlinesSection headlines={headlines} date={today} currentMember={member} />
+      <HeadlinesSection
+        headlines={headlines}
+        date={today}
+        currentMember={member}
+        clients={clientOptions}
+      />
 
       <div className="space-y-4">
         <h2 className="font-display text-lg font-semibold tracking-tight text-text">To-dos</h2>
