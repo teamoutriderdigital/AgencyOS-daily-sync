@@ -8,9 +8,10 @@ import type { TeamMember } from "@/lib/database.types";
 import { SectionShell } from "./section-shell";
 import { ClientChips } from "./client-chips";
 
-// One line per client headline for the selected day. News, not discussion —
-// add / edit / delete inline, scoped to the date. The client is chosen from
-// always-visible chips (Redstone / SBD / COD / Vital / + Other).
+// One line per client headline for the selected day. News, not discussion.
+// The add form is ALWAYS visible at the top with the client chips (Redstone /
+// SBD / COD / Vital / used-before / + Other) so anyone can just pick a client
+// and type — no extra clicks.
 export function HeadlinesSection({
   headlines,
   date,
@@ -22,43 +23,72 @@ export function HeadlinesSection({
   currentMember: TeamMember | null;
   clients?: string[];
 }) {
-  const [adding, setAdding] = useState(false);
-
   return (
-    <SectionShell
-      title="Client headlines"
-      count={headlines.length}
-      countLabel="headlines"
-      rightSlot={
-        <button
-          type="button"
-          onClick={() => setAdding(true)}
-          className="rounded-md bg-accent px-3 py-1 text-xs font-medium text-text-inverse hover:bg-accent-strong"
-        >
-          + Add
-        </button>
-      }
-    >
+    <SectionShell title="Client headlines" count={headlines.length} countLabel="headlines">
+      <AddHeadlineForm date={date} currentMember={currentMember} clients={clients} />
       <div className="divide-y divide-border/50">
-        {headlines.length === 0 && !adding && (
+        {headlines.length === 0 && (
           <p className="px-5 py-6 text-center text-xs italic text-text-muted">
-            No headlines yet. Good news, bad news — drop the day&apos;s client news here.
+            No headlines yet. Pick a client above and add the day&apos;s news.
           </p>
         )}
         {headlines.map((h) => (
           <HeadlineRow key={h.id} headline={h} clients={clients} />
         ))}
-        {adding && (
-          <NewHeadlineRow
-            date={date}
-            currentMember={currentMember}
-            clients={clients}
-            onCancel={() => setAdding(false)}
-            onSaved={() => setAdding(false)}
-          />
-        )}
       </div>
     </SectionShell>
+  );
+}
+
+// Persistent add bar — chips are always on screen; saving clears the form and
+// keeps it ready for the next headline.
+function AddHeadlineForm({
+  date,
+  currentMember,
+  clients
+}: {
+  date: string;
+  currentMember: TeamMember | null;
+  clients: string[];
+}) {
+  const [client, setClient] = useState<string | null>(null);
+  const [text, setText] = useState("");
+  const [pending, startTransition] = useTransition();
+
+  const save = () => {
+    const t = text.trim();
+    if (!t) return;
+    startTransition(async () => {
+      await createHeadline({ headline_date: date, client, text: t, created_by: currentMember });
+      setText("");
+      setClient(null);
+    });
+  };
+
+  return (
+    <div className="space-y-2 border-b border-border bg-surface-alt/30 px-5 py-3">
+      <ClientChips value={client} onChange={setClient} known={clients} />
+      <div className="flex items-center gap-2">
+        <input
+          type="text"
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") save();
+          }}
+          placeholder="What's the headline?"
+          className="min-w-0 flex-1 rounded-md border border-border bg-surface px-2 py-1 text-sm text-text"
+        />
+        <button
+          type="button"
+          onClick={save}
+          disabled={pending || !text.trim()}
+          className="rounded-md bg-accent px-3 py-1 text-xs font-medium text-text-inverse hover:bg-accent-strong disabled:opacity-50"
+        >
+          Add
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -144,69 +174,6 @@ function HeadlineRow({ headline, clients }: { headline: DailyHeadline; clients: 
       >
         🗑️
       </button>
-    </div>
-  );
-}
-
-function NewHeadlineRow({
-  date,
-  currentMember,
-  clients,
-  onCancel,
-  onSaved
-}: {
-  date: string;
-  currentMember: TeamMember | null;
-  clients: string[];
-  onCancel: () => void;
-  onSaved: () => void;
-}) {
-  const [client, setClient] = useState<string | null>(null);
-  const [text, setText] = useState("");
-  const [pending, startTransition] = useTransition();
-
-  const save = () => {
-    const t = text.trim();
-    if (!t) return;
-    startTransition(async () => {
-      await createHeadline({
-        headline_date: date,
-        client,
-        text: t,
-        created_by: currentMember
-      });
-      onSaved();
-    });
-  };
-
-  return (
-    <div className="space-y-2 bg-surface-alt/30 px-5 py-3">
-      <ClientChips value={client} onChange={setClient} known={clients} />
-      <div className="flex items-center gap-2">
-        <input
-          type="text"
-          value={text}
-          autoFocus
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") save();
-            if (e.key === "Escape") onCancel();
-          }}
-          placeholder="What's the headline?"
-          className="min-w-0 flex-1 rounded-md border border-border bg-surface px-2 py-1 text-sm text-text"
-        />
-        <button
-          type="button"
-          onClick={save}
-          disabled={pending || !text.trim()}
-          className="rounded-md bg-accent px-2 py-1 text-xs font-medium text-text-inverse hover:bg-accent-strong disabled:opacity-50"
-        >
-          Save
-        </button>
-        <button type="button" onClick={onCancel} className="text-xs text-text-muted hover:text-text">
-          Cancel
-        </button>
-      </div>
     </div>
   );
 }
