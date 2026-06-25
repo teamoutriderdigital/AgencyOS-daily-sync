@@ -66,3 +66,24 @@ async function loadSnapshot(date: string): Promise<DailySnapshot> {
     idsItems: idsResp.data ?? []
   };
 }
+
+// Headlines for a single date — used by the dashboard's "today's headlines"
+// panel. Degrades to an empty list when Supabase isn't configured.
+export async function getHeadlines(date: string): Promise<DailyHeadline[]> {
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+    return [];
+  }
+  try {
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .from("daily_headlines")
+      .select("*")
+      .eq("headline_date", date)
+      .order("created_at", { ascending: true });
+    if (error) throw new Error(error.message);
+    return data ?? [];
+  } catch (e) {
+    console.error("getHeadlines failed:", e);
+    return [];
+  }
+}

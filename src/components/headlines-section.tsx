@@ -6,13 +6,11 @@ import { createHeadline, deleteHeadline, updateHeadline } from "@/lib/daily-acti
 import type { DailyHeadline } from "@/lib/daily";
 import type { TeamMember } from "@/lib/database.types";
 import { SectionShell } from "./section-shell";
-import { ClientPicker } from "./client-picker";
-
-const CLIENT_FIELD_CLASS =
-  "w-40 flex-shrink-0 rounded-md border border-border bg-surface px-2 py-1 text-xs text-text";
+import { ClientChips } from "./client-chips";
 
 // One line per client headline for the selected day. News, not discussion —
-// add / edit / delete inline, scoped to the date.
+// add / edit / delete inline, scoped to the date. The client is chosen from
+// always-visible chips (Redstone / SBD / COD / Vital / + Other).
 export function HeadlinesSection({
   headlines,
   date,
@@ -63,7 +61,7 @@ export function HeadlinesSection({
 
 function HeadlineRow({ headline }: { headline: DailyHeadline }) {
   const [editing, setEditing] = useState(false);
-  const [client, setClient] = useState(headline.client ?? "");
+  const [client, setClient] = useState<string | null>(headline.client);
   const [text, setText] = useState(headline.text);
   const [pending, startTransition] = useTransition();
 
@@ -71,46 +69,44 @@ function HeadlineRow({ headline }: { headline: DailyHeadline }) {
     const t = text.trim();
     if (!t) return;
     startTransition(async () => {
-      await updateHeadline(headline.id, { client: client || null, text: t });
+      await updateHeadline(headline.id, { client, text: t });
       setEditing(false);
     });
   };
 
   if (editing) {
     return (
-      <div className="flex items-center gap-2 bg-surface-alt/30 px-5 py-2.5">
-        <ClientPicker
-          value={client || null}
-          onChange={(v) => setClient(v ?? "")}
-          className={CLIENT_FIELD_CLASS}
-        />
-        <input
-          type="text"
-          value={text}
-          autoFocus
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") save();
-            if (e.key === "Escape") setEditing(false);
-          }}
-          placeholder="Headline…"
-          className="min-w-0 flex-1 rounded-md border border-border bg-surface px-2 py-1 text-sm text-text"
-        />
-        <button
-          type="button"
-          onClick={save}
-          disabled={pending || !text.trim()}
-          className="rounded-md bg-accent px-2 py-1 text-xs font-medium text-text-inverse hover:bg-accent-strong disabled:opacity-50"
-        >
-          Save
-        </button>
-        <button
-          type="button"
-          onClick={() => setEditing(false)}
-          className="text-xs text-text-muted hover:text-text"
-        >
-          Cancel
-        </button>
+      <div className="space-y-2 bg-surface-alt/30 px-5 py-3">
+        <ClientChips value={client} onChange={setClient} />
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            value={text}
+            autoFocus
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") save();
+              if (e.key === "Escape") setEditing(false);
+            }}
+            placeholder="Headline…"
+            className="min-w-0 flex-1 rounded-md border border-border bg-surface px-2 py-1 text-sm text-text"
+          />
+          <button
+            type="button"
+            onClick={save}
+            disabled={pending || !text.trim()}
+            className="rounded-md bg-accent px-2 py-1 text-xs font-medium text-text-inverse hover:bg-accent-strong disabled:opacity-50"
+          >
+            Save
+          </button>
+          <button
+            type="button"
+            onClick={() => setEditing(false)}
+            className="text-xs text-text-muted hover:text-text"
+          >
+            Cancel
+          </button>
+        </div>
       </div>
     );
   }
@@ -160,7 +156,7 @@ function NewHeadlineRow({
   onCancel: () => void;
   onSaved: () => void;
 }) {
-  const [client, setClient] = useState("");
+  const [client, setClient] = useState<string | null>(null);
   const [text, setText] = useState("");
   const [pending, startTransition] = useTransition();
 
@@ -170,7 +166,7 @@ function NewHeadlineRow({
     startTransition(async () => {
       await createHeadline({
         headline_date: date,
-        client: client || null,
+        client,
         text: t,
         created_by: currentMember
       });
@@ -179,37 +175,33 @@ function NewHeadlineRow({
   };
 
   return (
-    <div className="flex items-center gap-2 bg-surface-alt/30 px-5 py-2.5">
-      <input
-        type="text"
-        value={client}
-        onChange={(e) => setClient(e.target.value)}
-        placeholder="Client"
-        className="w-40 flex-shrink-0 rounded-md border border-border bg-surface px-2 py-1 text-xs text-text"
-      />
-      <input
-        type="text"
-        value={text}
-        autoFocus
-        onChange={(e) => setText(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") save();
-          if (e.key === "Escape") onCancel();
-        }}
-        placeholder="What's the headline?"
-        className="min-w-0 flex-1 rounded-md border border-border bg-surface px-2 py-1 text-sm text-text"
-      />
-      <button
-        type="button"
-        onClick={save}
-        disabled={pending || !text.trim()}
-        className="rounded-md bg-accent px-2 py-1 text-xs font-medium text-text-inverse hover:bg-accent-strong disabled:opacity-50"
-      >
-        Save
-      </button>
-      <button type="button" onClick={onCancel} className="text-xs text-text-muted hover:text-text">
-        Cancel
-      </button>
+    <div className="space-y-2 bg-surface-alt/30 px-5 py-3">
+      <ClientChips value={client} onChange={setClient} />
+      <div className="flex items-center gap-2">
+        <input
+          type="text"
+          value={text}
+          autoFocus
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") save();
+            if (e.key === "Escape") onCancel();
+          }}
+          placeholder="What's the headline?"
+          className="min-w-0 flex-1 rounded-md border border-border bg-surface px-2 py-1 text-sm text-text"
+        />
+        <button
+          type="button"
+          onClick={save}
+          disabled={pending || !text.trim()}
+          className="rounded-md bg-accent px-2 py-1 text-xs font-medium text-text-inverse hover:bg-accent-strong disabled:opacity-50"
+        >
+          Save
+        </button>
+        <button type="button" onClick={onCancel} className="text-xs text-text-muted hover:text-text">
+          Cancel
+        </button>
+      </div>
     </div>
   );
 }
