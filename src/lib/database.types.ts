@@ -5,6 +5,8 @@ export type TeamMember = "Jack" | "Daniel" | "Leonardo" | "Rehan" | "Kas";
 export type L10Priority = "High" | "Medium" | "Low";
 export type IdsStatus = "Not started" | "Block" | "In progress" | "Solved";
 export type AttendanceStatus = "Present" | "Out";
+export type RockType = "company" | "individual";
+export type RockStatus = "On track" | "Off track" | "Done";
 
 export interface Database {
   public: {
@@ -18,6 +20,11 @@ export interface Database {
           due_date: string | null;
           priority: L10Priority | null;
           done: boolean;
+          // Weekly view: ISO week the item belongs to (auto-stamped on insert),
+          // and the week it was carried forward from (set by the carryover engine).
+          week_number: number | null;
+          year_number: number | null;
+          carried_from_week: number | null;
           created_at: string;
           updated_at: string;
         };
@@ -41,6 +48,12 @@ export interface Database {
           discuss: string | null;
           solve: string | null;
           archived: boolean;
+          // Weekly view: upvotes (topics/issues sort by votes first) + ISO week
+          // tracking and the carried-forward-from week (see 004 migration).
+          upvotes: number;
+          week_number: number | null;
+          year_number: number | null;
+          carried_from_week: number | null;
           created_at: string;
           updated_at: string;
         };
@@ -84,6 +97,43 @@ export interface Database {
           text: string;
         };
         Update: Partial<Database["public"]["Tables"]["daily_headlines"]["Row"]>;
+        Relationships: [];
+      };
+      // Rocks meeting: the finalized deliverable. One rock per row. `owner` is
+      // free text (rocks roster is wider than the team_member enum).
+      rocks: {
+        Row: {
+          id: number;
+          title: string;
+          owner: string | null;
+          rock_type: RockType;
+          smart: string | null;
+          deadline: string | null;
+          sort_order: number;
+          // Weekly tracker: reviewed status + which quarter the rock belongs to.
+          status: RockStatus;
+          quarter: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: Partial<Database["public"]["Tables"]["rocks"]["Row"]>;
+        Update: Partial<Database["public"]["Tables"]["rocks"]["Row"]>;
+        Relationships: [];
+      };
+      // Rocks meeting: keyed store for the decisions, collision resolutions,
+      // exit checklist, and facilitator. text_value = written call; checked =
+      // locked / done.
+      rock_meeting_kv: {
+        Row: {
+          key: string;
+          text_value: string | null;
+          checked: boolean;
+          updated_at: string;
+        };
+        Insert: Partial<Database["public"]["Tables"]["rock_meeting_kv"]["Row"]> & {
+          key: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["rock_meeting_kv"]["Row"]>;
         Relationships: [];
       };
     };

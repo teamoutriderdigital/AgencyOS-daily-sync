@@ -10,9 +10,10 @@ import {
   type IdsItem
 } from "@/lib/l10";
 import { OWNERS } from "@/lib/team";
-import { createIdsItem, deleteIdsItem, updateIdsItem } from "@/lib/l10-actions";
+import { createIdsItem, deleteIdsItem, updateIdsItem, upvoteIdsItem } from "@/lib/l10-actions";
 import type { IdsStatus, L10Priority, TeamMember } from "@/lib/database.types";
 import { SectionShell } from "./section-shell";
+import { CarryoverBadge } from "./carryover-badge";
 
 export function IdsSection({ items }: { items: IdsItem[] }) {
   const [adding, setAdding] = useState(false);
@@ -21,6 +22,8 @@ export function IdsSection({ items }: { items: IdsItem[] }) {
   const sorted = useMemo(() => {
     const priorityRank: Record<string, number> = { High: 0, Medium: 1 };
     return [...items].sort((a, b) => {
+      // Most-upvoted first, then priority, then soonest due.
+      if (b.upvotes !== a.upvotes) return b.upvotes - a.upvotes;
       const pr = (priorityRank[a.priority ?? ""] ?? 99) - (priorityRank[b.priority ?? ""] ?? 99);
       if (pr !== 0) return pr;
       const ad = a.due_date ? new Date(a.due_date).getTime() : Number.MAX_SAFE_INTEGER;
@@ -44,9 +47,11 @@ export function IdsSection({ items }: { items: IdsItem[] }) {
         </button>
       }
     >
-      <div className="divide-y divide-border/50">
-        <div className="grid grid-cols-[auto_minmax(0,1.5fr)_auto_auto_auto_minmax(0,1fr)_auto_auto_auto] items-center gap-2 border-b border-border bg-surface-alt/40 px-5 py-2 text-left text-xs uppercase tracking-wide text-text-muted">
+      <div className="overflow-x-auto">
+      <div className="min-w-[940px] divide-y divide-border/50">
+        <div className="grid grid-cols-[auto_auto_minmax(0,1.5fr)_auto_auto_auto_minmax(0,1fr)_auto_auto_auto] items-center gap-2 border-b border-border bg-surface-alt/40 px-5 py-2 text-left text-xs uppercase tracking-wide text-text-muted">
           <span></span>
+          <span className="font-medium">Votes</span>
           <span className="font-medium">Issue</span>
           <span className="font-medium">Owner</span>
           <span className="font-medium">Status</span>
@@ -71,6 +76,7 @@ export function IdsSection({ items }: { items: IdsItem[] }) {
         ))}
         {adding && <NewIdsRow onCancel={() => setAdding(false)} onSaved={() => setAdding(false)} />}
       </div>
+      </div>
     </SectionShell>
   );
 }
@@ -87,7 +93,7 @@ function IdsRow({
   const [, startTransition] = useTransition();
   return (
     <div>
-      <div className="grid grid-cols-[auto_minmax(0,1.5fr)_auto_auto_auto_minmax(0,1fr)_auto_auto_auto] items-center gap-2 px-5 py-2.5">
+      <div className="grid grid-cols-[auto_auto_minmax(0,1.5fr)_auto_auto_auto_minmax(0,1fr)_auto_auto_auto] items-center gap-2 px-5 py-2.5">
         <button
           type="button"
           onClick={onToggle}
@@ -96,16 +102,31 @@ function IdsRow({
         >
           {expanded ? "▾" : "▸"}
         </button>
-        <input
-          type="text"
-          defaultValue={item.issue}
-          onBlur={(e) => {
-            const v = e.target.value.trim();
-            if (v && v !== item.issue) startTransition(() => updateIdsItem(item.id, { issue: v }));
-          }}
-          className="min-w-0 rounded-md border border-transparent bg-transparent px-2 py-1 text-sm text-text hover:border-border focus:border-accent/50 focus:outline-none"
-          placeholder="Issue…"
-        />
+        <button
+          type="button"
+          onClick={() => startTransition(() => upvoteIdsItem(item.id))}
+          className="inline-flex items-center gap-1 rounded-md border border-border bg-surface px-2 py-1 text-xs font-medium text-text-muted hover:border-accent/50 hover:text-accent"
+          title="Upvote this topic"
+        >
+          👍 {item.upvotes}
+        </button>
+        <div className="flex min-w-0 flex-col gap-1">
+          <input
+            type="text"
+            defaultValue={item.issue}
+            onBlur={(e) => {
+              const v = e.target.value.trim();
+              if (v && v !== item.issue) startTransition(() => updateIdsItem(item.id, { issue: v }));
+            }}
+            className="min-w-0 rounded-md border border-transparent bg-transparent px-2 py-1 text-sm text-text hover:border-border focus:border-accent/50 focus:outline-none"
+            placeholder="Issue…"
+          />
+          {item.carried_from_week != null && (
+            <span className="px-2">
+              <CarryoverBadge fromWeek={item.carried_from_week} />
+            </span>
+          )}
+        </div>
         <select
           value={item.owner ?? ""}
           onChange={(e) =>
@@ -284,8 +305,9 @@ function NewIdsRow({ onCancel, onSaved }: { onCancel: () => void; onSaved: () =>
   };
 
   return (
-    <div className="grid grid-cols-[auto_minmax(0,1.5fr)_auto_auto_auto_minmax(0,1fr)_auto_auto_auto] items-center gap-2 bg-surface-alt/30 px-5 py-2.5">
+    <div className="grid grid-cols-[auto_auto_minmax(0,1.5fr)_auto_auto_auto_minmax(0,1fr)_auto_auto_auto] items-center gap-2 bg-surface-alt/30 px-5 py-2.5">
       <span className="text-xs text-text-muted">▸</span>
+      <span className="text-xs text-text-muted">—</span>
       <input
         type="text"
         value={issue}
