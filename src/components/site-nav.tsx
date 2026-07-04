@@ -16,7 +16,7 @@ export function SiteNav() {
   const pathname = usePathname();
   return (
     <header className="border-b border-border bg-surface">
-      <nav className="mx-auto flex max-w-7xl items-center gap-1 px-4 py-2">
+      <nav className="mx-auto flex max-w-7xl flex-wrap items-center gap-1 gap-y-2 px-4 py-2">
         <span className="mr-3 font-display text-sm font-semibold text-text">Daily Sync Board</span>
         {LINKS.map((l) => {
           const active = pathname.startsWith(l.href);
@@ -35,7 +35,7 @@ export function SiteNav() {
             </Link>
           );
         })}
-        <div className="ml-auto">
+        <div className="ml-auto shrink-0">
           <ShareLinkButton />
         </div>
       </nav>
