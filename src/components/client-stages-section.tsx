@@ -67,8 +67,19 @@ function ClientRow({ client }: { client: Client }) {
         type="text"
         defaultValue={client.name}
         onBlur={(e) => {
-          const v = e.target.value.trim();
-          if (v && v !== client.name) startTransition(() => updateClient(client.id, { name: v }));
+          const input = e.currentTarget;
+          const v = input.value.trim();
+          if (!v || v === client.name) return;
+          startTransition(async () => {
+            try {
+              await updateClient(client.id, { name: v });
+            } catch {
+              // Unique-name index rejected it (likely a duplicate) — revert the
+              // field so the user doesn't think the rename stuck.
+              input.value = client.name;
+              alert(`Couldn't rename to "${v}" — that name may already be taken.`);
+            }
+          });
         }}
         className="min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-2 py-1 text-sm font-medium text-text hover:border-border focus:border-accent/50 focus:outline-none"
         title="Client name"
@@ -123,42 +134,55 @@ function ClientRow({ client }: { client: Client }) {
 
 function NewClientRow({ onCancel, onSaved }: { onCancel: () => void; onSaved: () => void }) {
   const [name, setName] = useState("");
+  const [err, setErr] = useState("");
   const [pending, startTransition] = useTransition();
 
   const save = () => {
     const v = name.trim();
     if (!v) return;
+    setErr("");
     startTransition(async () => {
-      await addClient({ name: v });
-      onSaved();
+      try {
+        await addClient({ name: v });
+        onSaved();
+      } catch {
+        // Most likely the case-insensitive unique-name index rejected a duplicate.
+        setErr(`"${v}" already exists (or couldn't be added).`);
+      }
     });
   };
 
   return (
-    <div className="flex items-center gap-2 bg-surface-alt/30 px-5 py-2.5">
-      <input
-        type="text"
-        value={name}
-        autoFocus
-        onChange={(e) => setName(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") save();
-          if (e.key === "Escape") onCancel();
-        }}
-        placeholder="Client name…"
-        className="min-w-0 flex-1 rounded-md border border-border bg-surface px-2 py-1 text-sm text-text"
-      />
-      <button
-        type="button"
-        onClick={save}
-        disabled={pending || !name.trim()}
-        className="rounded-md bg-accent px-2 py-1 text-xs font-medium text-text-inverse hover:bg-accent-strong disabled:opacity-50"
-      >
-        Save
-      </button>
-      <button type="button" onClick={onCancel} className="text-xs text-text-muted hover:text-text">
-        Cancel
-      </button>
+    <div className="bg-surface-alt/30 px-5 py-2.5">
+      <div className="flex items-center gap-2">
+        <input
+          type="text"
+          value={name}
+          autoFocus
+          onChange={(e) => {
+            setName(e.target.value);
+            if (err) setErr("");
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") save();
+            if (e.key === "Escape") onCancel();
+          }}
+          placeholder="Client name…"
+          className="min-w-0 flex-1 rounded-md border border-border bg-surface px-2 py-1 text-sm text-text"
+        />
+        <button
+          type="button"
+          onClick={save}
+          disabled={pending || !name.trim()}
+          className="rounded-md bg-accent px-2 py-1 text-xs font-medium text-text-inverse hover:bg-accent-strong disabled:opacity-50"
+        >
+          Save
+        </button>
+        <button type="button" onClick={onCancel} className="text-xs text-text-muted hover:text-text">
+          Cancel
+        </button>
+      </div>
+      {err && <p className="mt-1 text-xs text-red-600">{err}</p>}
     </div>
   );
 }

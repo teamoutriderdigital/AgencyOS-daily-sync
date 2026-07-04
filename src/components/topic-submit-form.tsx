@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { createIdsItem } from "@/lib/l10-actions";
 import { L10_PRIORITIES } from "@/lib/l10";
@@ -22,7 +23,9 @@ export function TopicSubmitForm({ clients }: { clients: string[] }) {
   const [owner, setOwner] = useState<TeamMember | "">("");
   const [priority, setPriority] = useState<L10Priority | "">("");
   const [kind, setKind] = useState<Kind>(clients.length > 0 ? "Client" : "Internal");
-  const [clientName, setClientName] = useState(clients[0] ?? "");
+  // No client pre-selected — the user must pick one, so a topic can't be
+  // silently mis-tagged to the first client just by hitting Submit.
+  const [clientName, setClientName] = useState("");
   const [otherText, setOtherText] = useState("");
   const [done, setDone] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -120,6 +123,7 @@ export function TopicSubmitForm({ clients }: { clients: string[] }) {
                     className="w-full rounded-md border border-border bg-surface px-2 py-2 text-sm text-text"
                     aria-label="Client"
                   >
+                    <option value="">Select a client…</option>
                     {clients.map((c) => (
                       <option key={c} value={c}>
                         {c}
@@ -128,7 +132,11 @@ export function TopicSubmitForm({ clients }: { clients: string[] }) {
                   </select>
                 ) : (
                   <p className="text-xs italic text-text-muted">
-                    No clients yet — add one on the weekly board, or use Internal / Other.
+                    No clients yet — add one on the{" "}
+                    <Link href="/weekly" className="text-accent underline hover:no-underline">
+                      weekly board
+                    </Link>
+                    , or use Internal / Other.
                   </p>
                 )}
               </div>

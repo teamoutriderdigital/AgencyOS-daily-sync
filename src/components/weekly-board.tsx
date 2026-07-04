@@ -104,10 +104,10 @@ export function WeeklyBoard({ initialSnapshot }: Props) {
         const row = payload.new as Client;
         setClients((prev) => {
           const idx = prev.findIndex((c) => c.id === row.id);
-          if (idx === -1) return [...prev, row];
-          const copy = [...prev];
-          copy[idx] = row;
-          return copy;
+          const next = idx === -1 ? [...prev, row] : prev.map((c) => (c.id === row.id ? row : c));
+          // Keep the same (sort_order, name) order the server snapshot uses, so
+          // a newly-inserted client lands in the right spot without a reload.
+          return next.sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name));
         });
       })
       .subscribe();
