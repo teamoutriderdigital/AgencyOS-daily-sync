@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase-browser";
 import type { ActionItem, IdsItem } from "@/lib/l10";
 import type { Rock } from "@/lib/rocks";
 import { QUARTER } from "@/lib/rocks";
+import type { Client } from "@/lib/clients";
 import type { WeeklySnapshot } from "@/lib/weekly-server";
 import {
   currentIsoWeek,
@@ -18,6 +19,7 @@ import { triggerWeeklySync } from "@/lib/l10-actions";
 import { IdsSection } from "./ids-section";
 import { ActionItemsSection } from "./action-items-section";
 import { RocksTrackerSection } from "./rocks-tracker-section";
+import { ClientStagesSection } from "./client-stages-section";
 
 type Props = { initialSnapshot: WeeklySnapshot };
 
@@ -32,6 +34,7 @@ export function WeeklyBoard({ initialSnapshot }: Props) {
   const [actionItems, setActionItems] = useState<ActionItem[]>(initialSnapshot.actionItems);
   const [idsItems, setIdsItems] = useState<IdsItem[]>(initialSnapshot.idsItems);
   const [rocks, setRocks] = useState<Rock[]>(initialSnapshot.rocks);
+  const [clients, setClients] = useState<Client[]>(initialSnapshot.clients);
   const [syncing, startSync] = useTransition();
 
   // ─── Live master tables (to-dos + IDS + rocks) ────────────────────────────
@@ -90,10 +93,30 @@ export function WeeklyBoard({ initialSnapshot }: Props) {
       })
       .subscribe();
 
+    const clientsChannel = supabase
+      .channel("weekly:clients")
+      .on("postgres_changes", { event: "*", schema: "public", table: "clients" }, (payload) => {
+        if (payload.eventType === "DELETE") {
+          const oldId = (payload.old as { id: number }).id;
+          setClients((prev) => prev.filter((c) => c.id !== oldId));
+          return;
+        }
+        const row = payload.new as Client;
+        setClients((prev) => {
+          const idx = prev.findIndex((c) => c.id === row.id);
+          if (idx === -1) return [...prev, row];
+          const copy = [...prev];
+          copy[idx] = row;
+          return copy;
+        });
+      })
+      .subscribe();
+
     return () => {
       supabase.removeChannel(actionChannel);
       supabase.removeChannel(idsChannel);
       supabase.removeChannel(rocksChannel);
+      supabase.removeChannel(clientsChannel);
     };
   }, [supabase]);
 
@@ -171,6 +194,7 @@ export function WeeklyBoard({ initialSnapshot }: Props) {
       )}
 
       <RocksTrackerSection rocks={rocks} quarter={QUARTER} />
+      <ClientStagesSection clients={clients} />
       <IdsSection items={weekIds} />
       <ActionItemsSection items={weekActions} />
     </div>

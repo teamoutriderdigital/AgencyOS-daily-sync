@@ -1,38 +1,58 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { cn } from "@/lib/utils";
 import { createIdsItem } from "@/lib/l10-actions";
 import { L10_PRIORITIES } from "@/lib/l10";
 import { OWNERS } from "@/lib/team";
-import { CLIENTS } from "@/lib/daily";
 import type { L10Priority, TeamMember } from "@/lib/database.types";
 
+type Kind = "Client" | "Internal" | "Other";
+const KINDS: Kind[] = ["Client", "Internal", "Other"];
+
 // Lightweight public form (route /submit) so anyone can drop a topic/issue into
-// the IDS queue without opening the board. Writes an ids_items row via the same
-// server action the board uses; it lands in the queue and can be upvoted.
-export function TopicSubmitForm() {
+// the IDS queue without opening the board. The tag on the topic is one of:
+//   • Client   — pick from the tracked client list
+//   • Internal — the fixed "Internal" tag
+//   • Other    — free text for anything else
+// It writes an ids_items row via the same server action the board uses; the
+// topic lands in the queue and can be upvoted.
+export function TopicSubmitForm({ clients }: { clients: string[] }) {
   const [issue, setIssue] = useState("");
   const [owner, setOwner] = useState<TeamMember | "">("");
   const [priority, setPriority] = useState<L10Priority | "">("");
-  const [client, setClient] = useState("");
+  const [kind, setKind] = useState<Kind>(clients.length > 0 ? "Client" : "Internal");
+  const [clientName, setClientName] = useState(clients[0] ?? "");
+  const [otherText, setOtherText] = useState("");
   const [done, setDone] = useState(false);
   const [pending, startTransition] = useTransition();
 
+  // The client_internal tag(s) written for the chosen category.
+  const tagsFor = (): string[] => {
+    if (kind === "Client") return clientName ? [clientName] : [];
+    if (kind === "Internal") return ["Internal"];
+    const t = otherText.trim();
+    return t ? [t] : [];
+  };
+
+  const canSubmit =
+    issue.trim().length > 0 &&
+    (kind !== "Client" || !!clientName) &&
+    (kind !== "Other" || otherText.trim().length > 0);
+
   const submit = () => {
-    const v = issue.trim();
-    if (!v) return;
-    const tags = client.trim() ? [client.trim()] : [];
+    if (!canSubmit) return;
     startTransition(async () => {
       await createIdsItem({
-        issue: v,
+        issue: issue.trim(),
         owner: owner || null,
         priority: priority || null,
-        client_internal: tags
+        client_internal: tagsFor()
       });
       setIssue("");
       setOwner("");
       setPriority("");
-      setClient("");
+      setOtherText("");
       setDone(true);
     });
   };
@@ -51,7 +71,7 @@ export function TopicSubmitForm() {
           </div>
         )}
 
-        <div className="mt-5 space-y-3">
+        <div className="mt-5 space-y-4">
           <div>
             <label className="mb-1 block text-xs font-medium text-text-muted">Topic / issue *</label>
             <textarea
@@ -70,7 +90,69 @@ export function TopicSubmitForm() {
             />
           </div>
 
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          {/* Category: Client / Internal / Other */}
+          <div>
+            <label className="mb-1 block text-xs font-medium text-text-muted">This is about…</label>
+            <div className="inline-flex rounded-md border border-border p-0.5">
+              {KINDS.map((k) => (
+                <button
+                  key={k}
+                  type="button"
+                  onClick={() => setKind(k)}
+                  className={cn(
+                    "rounded px-3 py-1.5 text-sm font-medium transition-colors",
+                    kind === k
+                      ? "bg-accent text-text-inverse shadow-sm"
+                      : "text-text-muted hover:text-text"
+                  )}
+                >
+                  {k}
+                </button>
+              ))}
+            </div>
+
+            {kind === "Client" && (
+              <div className="mt-2">
+                {clients.length > 0 ? (
+                  <select
+                    value={clientName}
+                    onChange={(e) => setClientName(e.target.value)}
+                    className="w-full rounded-md border border-border bg-surface px-2 py-2 text-sm text-text"
+                    aria-label="Client"
+                  >
+                    {clients.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <p className="text-xs italic text-text-muted">
+                    No clients yet — add one on the weekly board, or use Internal / Other.
+                  </p>
+                )}
+              </div>
+            )}
+
+            {kind === "Other" && (
+              <div className="mt-2">
+                <input
+                  type="text"
+                  value={otherText}
+                  onChange={(e) => setOtherText(e.target.value)}
+                  placeholder="Name it (e.g. a prospect, a tool, a project)…"
+                  className="w-full rounded-md border border-border bg-surface px-2 py-2 text-sm text-text focus:border-accent/50 focus:outline-none"
+                  aria-label="Other label"
+                />
+              </div>
+            )}
+
+            {kind === "Internal" && (
+              <p className="mt-2 text-xs text-text-muted">Tagged as an internal topic.</p>
+            )}
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="mb-1 block text-xs font-medium text-text-muted">Owner</label>
               <select
@@ -101,28 +183,12 @@ export function TopicSubmitForm() {
                 ))}
               </select>
             </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-text-muted">Client</label>
-              <input
-                type="text"
-                list="submit-clients"
-                value={client}
-                onChange={(e) => setClient(e.target.value)}
-                placeholder="Optional"
-                className="w-full rounded-md border border-border bg-surface px-2 py-2 text-sm text-text"
-              />
-              <datalist id="submit-clients">
-                {CLIENTS.map((c) => (
-                  <option key={c} value={c} />
-                ))}
-              </datalist>
-            </div>
           </div>
 
           <button
             type="button"
             onClick={submit}
-            disabled={pending || !issue.trim()}
+            disabled={pending || !canSubmit}
             className="w-full rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-inverse hover:bg-accent-strong disabled:opacity-50"
           >
             {pending ? "Submitting…" : "Submit topic"}
