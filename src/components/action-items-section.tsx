@@ -12,6 +12,7 @@ import {
 } from "@/lib/l10-actions";
 import type { L10Priority, TeamMember } from "@/lib/database.types";
 import { SectionShell } from "./section-shell";
+import { CarryoverBadge } from "./carryover-badge";
 
 type Sort = "due" | "priority" | "created";
 
@@ -97,18 +98,25 @@ function ActionRow({ item }: { item: ActionItem }) {
       >
         {item.done && <span className="text-xs leading-3">✓</span>}
       </button>
-      <input
-        type="text"
-        defaultValue={item.item}
-        onBlur={(e) => {
-          const v = e.target.value.trim();
-          if (v && v !== item.item) startTransition(() => updateActionItem(item.id, { item: v }));
-        }}
-        className={cn(
-          "min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-2 py-1 text-sm hover:border-border focus:border-accent/50 focus:outline-none",
-          item.done ? "text-text-muted line-through" : "text-text"
+      <div className="flex min-w-0 flex-1 flex-col gap-1">
+        <input
+          type="text"
+          defaultValue={item.item}
+          onBlur={(e) => {
+            const v = e.target.value.trim();
+            if (v && v !== item.item) startTransition(() => updateActionItem(item.id, { item: v }));
+          }}
+          className={cn(
+            "min-w-0 rounded-md border border-transparent bg-transparent px-2 py-1 text-sm hover:border-border focus:border-accent/50 focus:outline-none",
+            item.done ? "text-text-muted line-through" : "text-text"
+          )}
+        />
+        {item.carried_from_week != null && (
+          <span className="px-2">
+            <CarryoverBadge fromWeek={item.carried_from_week} />
+          </span>
         )}
-      />
+      </div>
       <select
         value={item.assignee ?? ""}
         onChange={(e) =>

@@ -25,6 +25,7 @@ const config: Config = {
       },
       fontFamily: {
         display: [
+          "var(--font-display)",
           "ui-sans-serif",
           "system-ui",
           "-apple-system",

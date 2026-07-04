@@ -5,7 +5,10 @@ import { createClient } from "./supabase-server";
 import type { IdsStatus, L10Priority, TeamMember } from "./database.types";
 
 function revalidateDaily() {
+  // To-dos and IDS are shared master state shown on both the daily and weekly
+  // boards, so refresh both.
   revalidatePath("/daily");
+  revalidatePath("/weekly");
 }
 
 // ─── Action items (to-dos) ───────────────────────────────────────────────────
@@ -93,6 +96,27 @@ export async function updateIdsItem(id: number, input: Partial<IdsItemInput>) {
 export async function deleteIdsItem(id: number) {
   const supabase = createClient();
   const { error } = await supabase.from("ids_items").delete().eq("id", id);
+  if (error) throw new Error(error.message);
+  revalidateDaily();
+}
+
+// Atomic +1 upvote (via the upvote_ids_item RPC so concurrent votes don't race).
+export async function upvoteIdsItem(id: number) {
+  const supabase = createClient();
+  const { error } = await supabase.rpc("upvote_ids_item", { item_id: id });
+  if (error) throw new Error(error.message);
+  revalidateDaily();
+}
+
+// ─── Weekly carryover ────────────────────────────────────────────────────────
+// Roll every still-open to-do / issue from prior weeks forward into the given
+// ISO week (records carried_from_week for the badge).
+export async function triggerWeeklySync(targetYear: number, targetWeek: number) {
+  const supabase = createClient();
+  const { error } = await supabase.rpc("sync_weekly_pending_items", {
+    target_year: targetYear,
+    target_week: targetWeek
+  });
   if (error) throw new Error(error.message);
   revalidateDaily();
 }
