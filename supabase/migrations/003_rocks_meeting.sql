@@ -7,7 +7,7 @@
 --
 --   rocks           — the deliverable: one finalized rock per row (owner, type,
 --                     "done" sentence, deadline). Owner is free text because the
---                     rocks roster (Darko, Mustafa) is wider than the daily
+--                     rocks roster (Darko, Mostafa) is wider than the daily
 --                     team_member enum.
 --   rock_meeting_kv — everything else the meeting locks, as a keyed store: the
 --                     four decisions, the ownership-collision resolutions, the
