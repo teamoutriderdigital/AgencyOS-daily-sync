@@ -5,7 +5,7 @@
 --   • status  — On track / Off track / Done, toggled each week at the L10.
 --   • quarter — which quarter the rock belongs to (defaults to the live one).
 -- Owner stays free text (the rocks roster is wider than the team_member enum:
--- it includes Darko and Mustafa). Idempotent — safe to re-run.
+-- it includes Darko and Mostafa). Idempotent — safe to re-run.
 
 do $$ begin
   create type rock_status as enum ('On track', 'Off track', 'Done');
