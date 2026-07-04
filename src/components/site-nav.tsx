@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { logout } from "@/lib/auth-actions";
 
 const LINKS = [
   { href: "/dashboard", label: "Dashboard" },
@@ -14,6 +15,9 @@ const LINKS = [
 
 export function SiteNav() {
   const pathname = usePathname();
+  // The public submit form and the login screen render with no app chrome —
+  // recipients of the shareable link only ever see the form.
+  if (pathname === "/submit" || pathname === "/login") return null;
   return (
     <header className="border-b border-border bg-surface">
       <nav className="mx-auto flex max-w-7xl flex-wrap items-center gap-1 gap-y-2 px-4 py-2">
@@ -35,8 +39,17 @@ export function SiteNav() {
             </Link>
           );
         })}
-        <div className="ml-auto shrink-0">
+        <div className="ml-auto flex shrink-0 items-center gap-2">
           <ShareLinkButton />
+          <form action={logout}>
+            <button
+              type="submit"
+              className="rounded-md border border-border bg-surface px-3 py-1.5 text-sm font-medium text-text-muted transition-colors hover:bg-surface-alt hover:text-text"
+              title="Lock the boards (sign out on this browser)"
+            >
+              🔒 Lock
+            </button>
+          </form>
         </div>
       </nav>
     </header>
