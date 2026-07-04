@@ -7,6 +7,7 @@ export type IdsStatus = "Not started" | "Block" | "In progress" | "Solved";
 export type AttendanceStatus = "Present" | "Out";
 export type RockType = "company" | "individual";
 export type RockStatus = "On track" | "Off track" | "Done";
+export type ClientStage = "Onboarding" | "Active" | "At Risk" | "Delivered" | "Churned";
 
 export interface Database {
   public: {
@@ -118,6 +119,24 @@ export interface Database {
         };
         Insert: Partial<Database["public"]["Tables"]["rocks"]["Row"]>;
         Update: Partial<Database["public"]["Tables"]["rocks"]["Row"]>;
+        Relationships: [];
+      };
+      // Client lifecycle tracker (weekly board) + client picker for /submit.
+      clients: {
+        Row: {
+          id: number;
+          name: string;
+          stage: ClientStage;
+          owner: string | null;
+          notes: string | null;
+          sort_order: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: Partial<Database["public"]["Tables"]["clients"]["Row"]> & {
+          name: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["clients"]["Row"]>;
         Relationships: [];
       };
       // Rocks meeting: keyed store for the decisions, collision resolutions,
