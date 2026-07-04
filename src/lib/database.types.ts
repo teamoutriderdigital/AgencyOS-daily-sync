@@ -1,7 +1,7 @@
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
 
 // ─── Enums (mirror the GrowthArchon L10 module) ─────────────────────────────
-export type TeamMember = "Jack" | "Daniel" | "Leonardo" | "Rehan" | "Kas" | "Mustafa";
+export type TeamMember = "Jack" | "Daniel" | "Leonardo" | "Rehan" | "Kas" | "Mostafa";
 export type L10Priority = "High" | "Medium" | "Low";
 export type IdsStatus = "Not started" | "Block" | "In progress" | "Solved";
 export type AttendanceStatus = "Present" | "Out";

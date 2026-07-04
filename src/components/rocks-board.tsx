@@ -19,7 +19,7 @@ import { RockLockCard } from "./rock-lock-card";
 import { RocksTable } from "./rocks-table";
 import { RockChecklist } from "./rock-checklist";
 
-const ROSTER = ["Jack", "Daniel", "Darko*", "Leo", "Rehan", "Kas", "Mustafa"];
+const ROSTER = ["Jack", "Daniel", "Darko*", "Leo", "Rehan", "Kas", "Mostafa"];
 
 function sortRocks(list: Rock[]): Rock[] {
   return [...list].sort(

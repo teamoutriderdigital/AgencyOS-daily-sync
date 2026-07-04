@@ -4,8 +4,8 @@ export type Rock = Tables<"rocks">;
 export type RockKv = Tables<"rock_meeting_kv">;
 
 // The rocks roster is wider than the daily team_member enum (adds Darko and
-// Mustafa), so rock owners are free text drawn from this list.
-export const ROCK_OWNERS = ["Jack", "Daniel", "Darko", "Leo", "Rehan", "Kas", "Mustafa"];
+// Mostafa), so rock owners are free text drawn from this list.
+export const ROCK_OWNERS = ["Jack", "Daniel", "Darko", "Leo", "Rehan", "Kas", "Mostafa"];
 
 export const ROCK_TYPES: RockType[] = ["company", "individual"];
 
@@ -182,11 +182,11 @@ export const COLLISIONS: CollisionSpec[] = [
     tag: "Collision",
     title: "SEO in the site workflow",
     parties: [
-      { who: "Mustafa", note: "owns the site workflow, “tag-teamed on SEO”" },
+      { who: "Mostafa", note: "owns the site workflow, “tag-teamed on SEO”" },
       { who: "Darko", note: "SEO inside that workflow", flag: "absent" }
     ],
     recommend:
-      "Mustafa owns the workflow rock; Darko owns the SEO step as its own rock (castans.com authority to reuse). Confirm split with Darko live in item 4 — no co-ownership.",
+      "Mostafa owns the workflow rock; Darko owns the SEO step as its own rock (castans.com authority to reuse). Confirm split with Darko live in item 4 — no co-ownership.",
     placeholder: "who owns the SEO step"
   },
   {
@@ -255,7 +255,7 @@ export const OWNER_REFERENCE: OwnerRef[] = [
     ]
   },
   {
-    name: "Mustafa",
+    name: "Mostafa",
     count: "2 rocks",
     rocks: [
       "20–30 workflows: site from zero → live, incl. UX-research + nudge/conversion step",
@@ -366,8 +366,8 @@ export const SEED_ROCKS: RockSeed[] = [
   { title: "Client workflows flowcharted", owner: "Leo", rock_type: "company", smart: "Every client workflow charted beginning to end and validated with owners." },
   { title: "Audit backend + Plane logic", owner: "Leo", rock_type: "company", smart: "Audit backend built with Plane conditional logic driving Kas's audit product." },
   { title: "Obsidian vault on VPS", owner: "Leo", rock_type: "company", smart: "Vault architecture live on the VPS as the context source of truth." },
-  { title: "Site workflow (0 → live)", owner: "Mustafa", rock_type: "company", smart: "20–30 workflows take a site zero → published, incl. UX-research + nudge/conversion step." },
-  { title: "Internal sites built", owner: "Mustafa", rock_type: "company", smart: "Agency OS, business OS, castans.com and Jack's site built as the test of the workflow." },
+  { title: "Site workflow (0 → live)", owner: "Mostafa", rock_type: "company", smart: "20–30 workflows take a site zero → published, incl. UX-research + nudge/conversion step." },
+  { title: "Internal sites built", owner: "Mostafa", rock_type: "company", smart: "Agency OS, business OS, castans.com and Jack's site built as the test of the workflow." },
   { title: "SEO step + internal ranking", owner: "Darko", rock_type: "individual", smart: "SEO step defined inside the site workflow; internal sites ranking, reusing castans.com authority." },
   { title: "Compliance playbooks", owner: "Darko", rock_type: "individual", smart: "Reusable compliance playbooks documented and handed to the workflow." },
   { title: "Sales — agency OS clients", owner: "Jack", rock_type: "individual", smart: "Pipeline for five-figure agency-OS clients live with first qualified opportunities." },
