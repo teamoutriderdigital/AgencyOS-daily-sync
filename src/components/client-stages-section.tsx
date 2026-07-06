@@ -62,7 +62,8 @@ export function ClientStagesSection({ clients }: { clients: Client[] }) {
 function ClientRow({ client }: { client: Client }) {
   const [, startTransition] = useTransition();
   return (
-    <div className="flex flex-wrap items-center gap-2 px-5 py-2.5">
+    <div className="px-5 py-2.5">
+      <div className="flex flex-wrap items-center gap-2">
       <input
         type="text"
         defaultValue={client.name}
@@ -128,6 +129,29 @@ function ClientRow({ client }: { client: Client }) {
       >
         ✕
       </button>
+      </div>
+      <textarea
+        defaultValue={client.notes ?? ""}
+        placeholder="Where are we at with them? (status, blockers, next step)"
+        rows={1}
+        ref={(el) => {
+          if (el) {
+            el.style.height = "auto";
+            el.style.height = `${el.scrollHeight}px`;
+          }
+        }}
+        onInput={(e) => {
+          e.currentTarget.style.height = "auto";
+          e.currentTarget.style.height = `${e.currentTarget.scrollHeight}px`;
+        }}
+        onBlur={(e) => {
+          const v = e.target.value.trim();
+          if (v !== (client.notes ?? "")) {
+            startTransition(() => updateClient(client.id, { notes: v || null }));
+          }
+        }}
+        className="mt-1.5 w-full resize-none rounded-md border border-border bg-surface-alt/40 px-2 py-1.5 text-xs leading-snug text-text hover:border-border focus:border-accent/50 focus:bg-surface focus:outline-none"
+      />
     </div>
   );
 }
