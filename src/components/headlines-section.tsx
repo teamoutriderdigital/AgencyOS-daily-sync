@@ -91,6 +91,43 @@ function AddHeadlineForm({
   );
 }
 
+// Render a headline body nicely: an "Owner: … · Status" first line becomes a
+// small header, "•"/"-" lines become proper bullets, everything else is a plain
+// wrapped line.
+function HeadlineBody({ text }: { text: string }) {
+  const lines = text
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean);
+
+  return (
+    <div className="min-w-0 flex-1 space-y-1">
+      {lines.map((line, i) => {
+        if (/^owner\s*:/i.test(line)) {
+          return (
+            <p
+              key={i}
+              className="text-xs font-semibold uppercase tracking-wide text-text-muted"
+            >
+              {line}
+            </p>
+          );
+        }
+        const isBullet = line.startsWith("•") || line.startsWith("-");
+        const content = isBullet ? line.replace(/^[•-]\s*/, "") : line;
+        return (
+          <div key={i} className="flex gap-2 text-sm text-text">
+            {isBullet && (
+              <span className="mt-[7px] h-1.5 w-1.5 flex-shrink-0 rounded-full bg-accent/60" />
+            )}
+            <span className="min-w-0 break-words leading-snug">{content}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function HeadlineRow({ headline, clients }: { headline: DailyHeadline; clients: string[] }) {
   const [editing, setEditing] = useState(false);
   const [client, setClient] = useState<string | null>(headline.client);
@@ -154,9 +191,7 @@ function HeadlineRow({ headline, clients }: { headline: DailyHeadline; clients: 
       ) : (
         <span className="mt-0.5 w-24 flex-shrink-0 text-xs italic text-text-muted">—</span>
       )}
-      <span className="min-w-0 flex-1 whitespace-pre-line break-words text-sm text-text">
-        {headline.text}
-      </span>
+      <HeadlineBody text={headline.text} />
       <button
         type="button"
         onClick={() => setEditing(true)}
