@@ -8,10 +8,9 @@ import type { TeamMember } from "@/lib/database.types";
 import { SectionShell } from "./section-shell";
 import { ClientChips } from "./client-chips";
 
-// One line per client headline for the selected day. News, not discussion.
-// The add form is ALWAYS visible at the top with the client chips (Redstone /
-// SBD / COD / Vital / used-before / + Other) so anyone can just pick a client
-// and type — no extra clicks.
+// One entry per client for the selected day. Pick a client, then type the
+// update — use new lines for bullets. The add form is always visible at the top
+// with the client chips (Redstone / SBD / COD / Vital / used-before / + Other).
 export function HeadlinesSection({
   headlines,
   date,
@@ -29,7 +28,7 @@ export function HeadlinesSection({
       <div className="divide-y divide-border/50">
         {headlines.length === 0 && (
           <p className="px-5 py-6 text-center text-xs italic text-text-muted">
-            No headlines yet. Pick a client above and add the day&apos;s news.
+            No headlines yet. Pick a client above and add the day&apos;s update.
           </p>
         )}
         {headlines.map((h) => (
@@ -40,8 +39,8 @@ export function HeadlinesSection({
   );
 }
 
-// Persistent add bar — chips are always on screen; saving clears the form and
-// keeps it ready for the next headline.
+// Persistent add bar — chips always on screen; saving clears and keeps it ready.
+// The text is a textarea so you can enter multiple bullet lines.
 function AddHeadlineForm({
   date,
   currentMember,
@@ -68,22 +67,22 @@ function AddHeadlineForm({
   return (
     <div className="space-y-2 border-b border-border bg-surface-alt/30 px-5 py-3">
       <ClientChips value={client} onChange={setClient} known={clients} />
-      <div className="flex items-center gap-2">
-        <input
-          type="text"
+      <div className="flex items-start gap-2">
+        <textarea
           value={text}
+          rows={3}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === "Enter") save();
+            if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) save();
           }}
-          placeholder="What's the headline?"
-          className="min-w-0 flex-1 rounded-md border border-border bg-surface px-2 py-1 text-sm text-text"
+          placeholder={"What's the update? One line each for bullets.\n• …\n• …"}
+          className="min-w-0 flex-1 resize-y rounded-md border border-border bg-surface px-2 py-1 text-sm text-text"
         />
         <button
           type="button"
           onClick={save}
           disabled={pending || !text.trim()}
-          className="rounded-md bg-accent px-3 py-1 text-xs font-medium text-text-inverse hover:bg-accent-strong disabled:opacity-50"
+          className="rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-text-inverse hover:bg-accent-strong disabled:opacity-50"
         >
           Add
         </button>
@@ -111,53 +110,57 @@ function HeadlineRow({ headline, clients }: { headline: DailyHeadline; clients: 
     return (
       <div className="space-y-2 bg-surface-alt/30 px-5 py-3">
         <ClientChips value={client} onChange={setClient} known={clients} />
-        <div className="flex items-center gap-2">
-          <input
-            type="text"
+        <div className="flex items-start gap-2">
+          <textarea
             value={text}
+            rows={5}
             autoFocus
             onChange={(e) => setText(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter") save();
+              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) save();
               if (e.key === "Escape") setEditing(false);
             }}
-            placeholder="Headline…"
-            className="min-w-0 flex-1 rounded-md border border-border bg-surface px-2 py-1 text-sm text-text"
+            placeholder="Update… (one line each for bullets)"
+            className="min-w-0 flex-1 resize-y rounded-md border border-border bg-surface px-2 py-1 text-sm text-text"
           />
-          <button
-            type="button"
-            onClick={save}
-            disabled={pending || !text.trim()}
-            className="rounded-md bg-accent px-2 py-1 text-xs font-medium text-text-inverse hover:bg-accent-strong disabled:opacity-50"
-          >
-            Save
-          </button>
-          <button
-            type="button"
-            onClick={() => setEditing(false)}
-            className="text-xs text-text-muted hover:text-text"
-          >
-            Cancel
-          </button>
+          <div className="flex flex-col gap-1">
+            <button
+              type="button"
+              onClick={save}
+              disabled={pending || !text.trim()}
+              className="rounded-md bg-accent px-2 py-1 text-xs font-medium text-text-inverse hover:bg-accent-strong disabled:opacity-50"
+            >
+              Save
+            </button>
+            <button
+              type="button"
+              onClick={() => setEditing(false)}
+              className="text-xs text-text-muted hover:text-text"
+            >
+              Cancel
+            </button>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="flex items-center gap-3 px-5 py-2.5">
+    <div className="flex items-start gap-3 px-5 py-3">
       {headline.client ? (
-        <span className="w-40 flex-shrink-0 truncate rounded-full border border-border bg-surface-alt px-2 py-0.5 text-xs font-semibold text-text-muted">
+        <span className="mt-0.5 w-24 flex-shrink-0 truncate rounded-full border border-border bg-surface-alt px-2 py-0.5 text-center text-xs font-semibold text-text-muted">
           {headline.client}
         </span>
       ) : (
-        <span className="w-40 flex-shrink-0 text-xs italic text-text-muted">—</span>
+        <span className="mt-0.5 w-24 flex-shrink-0 text-xs italic text-text-muted">—</span>
       )}
-      <span className="min-w-0 flex-1 truncate text-sm text-text">{headline.text}</span>
+      <span className="min-w-0 flex-1 whitespace-pre-line break-words text-sm text-text">
+        {headline.text}
+      </span>
       <button
         type="button"
         onClick={() => setEditing(true)}
-        className="text-xs text-text-muted hover:text-accent"
+        className="mt-0.5 text-xs text-text-muted hover:text-accent"
         title="Edit"
       >
         ✏️
@@ -169,7 +172,7 @@ function HeadlineRow({ headline, clients }: { headline: DailyHeadline; clients: 
             startTransition(() => deleteHeadline(headline.id));
           }
         }}
-        className={cn("text-xs text-text-muted hover:text-red-600", pending && "opacity-50")}
+        className={cn("mt-0.5 text-xs text-text-muted hover:text-red-600", pending && "opacity-50")}
         title="Delete"
       >
         🗑️
