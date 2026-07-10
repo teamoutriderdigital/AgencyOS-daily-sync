@@ -15,6 +15,13 @@ import type { IdsStatus, L10Priority, TeamMember } from "@/lib/database.types";
 import { SectionShell } from "./section-shell";
 import { CarryoverBadge } from "./carryover-badge";
 
+// Grow a textarea to fit its content so the full issue text is always visible.
+function autoResize(el: HTMLTextAreaElement | null) {
+  if (!el) return;
+  el.style.height = "auto";
+  el.style.height = `${el.scrollHeight}px`;
+}
+
 export function IdsSection({ items }: { items: IdsItem[] }) {
   const [adding, setAdding] = useState(false);
   const [expandedId, setExpandedId] = useState<number | null>(null);
@@ -48,8 +55,8 @@ export function IdsSection({ items }: { items: IdsItem[] }) {
       }
     >
       <div className="overflow-x-auto">
-      <div className="min-w-[940px] divide-y divide-border/50">
-        <div className="grid grid-cols-[auto_auto_minmax(0,1.5fr)_auto_auto_auto_minmax(0,1fr)_auto_auto_auto] items-center gap-2 border-b border-border bg-surface-alt/40 px-5 py-2 text-left text-xs uppercase tracking-wide text-text-muted">
+      <div className="min-w-[1040px] divide-y divide-border/50">
+        <div className="grid grid-cols-[auto_auto_minmax(0,2.5fr)_auto_auto_auto_minmax(0,1fr)_auto_auto_auto] items-center gap-2 border-b border-border bg-surface-alt/40 px-5 py-2 text-left text-xs uppercase tracking-wide text-text-muted">
           <span></span>
           <span className="font-medium">Votes</span>
           <span className="font-medium">Issue</span>
@@ -93,7 +100,7 @@ function IdsRow({
   const [, startTransition] = useTransition();
   return (
     <div>
-      <div className="grid grid-cols-[auto_auto_minmax(0,1.5fr)_auto_auto_auto_minmax(0,1fr)_auto_auto_auto] items-center gap-2 px-5 py-2.5">
+      <div className="grid grid-cols-[auto_auto_minmax(0,2.5fr)_auto_auto_auto_minmax(0,1fr)_auto_auto_auto] items-center gap-2 px-5 py-2.5">
         <button
           type="button"
           onClick={onToggle}
@@ -111,14 +118,16 @@ function IdsRow({
           👍 {item.upvotes}
         </button>
         <div className="flex min-w-0 flex-col gap-1">
-          <input
-            type="text"
+          <textarea
+            ref={autoResize}
             defaultValue={item.issue}
+            rows={1}
+            onInput={(e) => autoResize(e.currentTarget)}
             onBlur={(e) => {
               const v = e.target.value.trim();
               if (v && v !== item.issue) startTransition(() => updateIdsItem(item.id, { issue: v }));
             }}
-            className="min-w-0 rounded-md border border-transparent bg-transparent px-2 py-1 text-sm text-text hover:border-border focus:border-accent/50 focus:outline-none"
+            className="min-w-0 resize-none overflow-hidden whitespace-pre-wrap break-words rounded-md border border-transparent bg-transparent px-2 py-1 text-sm leading-snug text-text hover:border-border focus:border-accent/50 focus:outline-none"
             placeholder="Issue…"
           />
           {item.carried_from_week != null && (
@@ -305,20 +314,22 @@ function NewIdsRow({ onCancel, onSaved }: { onCancel: () => void; onSaved: () =>
   };
 
   return (
-    <div className="grid grid-cols-[auto_auto_minmax(0,1.5fr)_auto_auto_auto_minmax(0,1fr)_auto_auto_auto] items-center gap-2 bg-surface-alt/30 px-5 py-2.5">
+    <div className="grid grid-cols-[auto_auto_minmax(0,2.5fr)_auto_auto_auto_minmax(0,1fr)_auto_auto_auto] items-center gap-2 bg-surface-alt/30 px-5 py-2.5">
       <span className="text-xs text-text-muted">▸</span>
       <span className="text-xs text-text-muted">—</span>
-      <input
-        type="text"
+      <textarea
+        ref={autoResize}
         value={issue}
         autoFocus
+        rows={1}
+        onInput={(e) => autoResize(e.currentTarget)}
         onChange={(e) => setIssue(e.target.value)}
         onKeyDown={(e) => {
           if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) save();
           if (e.key === "Escape") onCancel();
         }}
         placeholder="What's the issue?"
-        className="min-w-0 rounded-md border border-border bg-surface px-2 py-1 text-sm text-text"
+        className="min-w-0 resize-none overflow-hidden whitespace-pre-wrap break-words rounded-md border border-border bg-surface px-2 py-1 text-sm leading-snug text-text"
       />
       <select
         value={owner}

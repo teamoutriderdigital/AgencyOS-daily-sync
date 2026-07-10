@@ -73,3 +73,46 @@ export async function deleteHeadline(id: number) {
   if (error) throw new Error(error.message);
   revalidateDaily();
 }
+
+// ─── Items to review for the day ─────────────────────────────────────────────
+// Date-scoped checklist. Each item is one line of text with a "reviewed"
+// checkbox (done). Does not carry over — the list is fresh each day.
+
+export type ReviewItemInput = {
+  review_date: string;
+  text: string;
+  created_by?: TeamMember | null;
+};
+
+export async function createReviewItem(input: ReviewItemInput) {
+  const supabase = createClient();
+  const text = input.text.trim();
+  if (!text) throw new Error("Review item text is required");
+  const { error } = await supabase.from("daily_review_items").insert({
+    review_date: input.review_date,
+    text,
+    created_by: input.created_by ?? null
+  });
+  if (error) throw new Error(error.message);
+  revalidateDaily();
+}
+
+export async function updateReviewItem(
+  id: number,
+  input: Partial<{ text: string; done: boolean }>
+) {
+  const supabase = createClient();
+  const patch: Record<string, unknown> = {};
+  if ("text" in input) patch.text = input.text?.trim() || "";
+  if ("done" in input) patch.done = input.done;
+  const { error } = await supabase.from("daily_review_items").update(patch).eq("id", id);
+  if (error) throw new Error(error.message);
+  revalidateDaily();
+}
+
+export async function deleteReviewItem(id: number) {
+  const supabase = createClient();
+  const { error } = await supabase.from("daily_review_items").delete().eq("id", id);
+  if (error) throw new Error(error.message);
+  revalidateDaily();
+}

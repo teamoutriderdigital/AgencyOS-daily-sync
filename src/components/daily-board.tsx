@@ -2,14 +2,14 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase-browser";
-import type { ActionItem, IdsItem } from "@/lib/l10";
-import type { DailyCheckin, DailyHeadline } from "@/lib/daily";
+import type { ActionItem } from "@/lib/l10";
+import type { DailyCheckin, DailyHeadline, DailyReviewItem } from "@/lib/daily";
 import { AGENDA_ORDER } from "@/lib/daily";
 import type { DailySnapshot } from "@/lib/daily-server";
 import type { TeamMember } from "@/lib/database.types";
 import { OWNERS } from "@/lib/team";
 import { ActionItemsSection } from "./action-items-section";
-import { IdsSection } from "./ids-section";
+import { ReviewSection } from "./review-section";
 import { DateHeader } from "./date-header";
 import { CheckinSection } from "./checkin-section";
 import { HeadlinesSection } from "./headlines-section";
@@ -33,8 +33,8 @@ export function DailyBoard({ initialSnapshot, today, knownClients }: Props) {
   const [currentMember, setCurrentMember] = useState<TeamMember | null>(null);
   const [checkins, setCheckins] = useState<DailyCheckin[]>(initialSnapshot.checkins);
   const [headlines, setHeadlines] = useState<DailyHeadline[]>(initialSnapshot.headlines);
+  const [reviewItems, setReviewItems] = useState<DailyReviewItem[]>(initialSnapshot.reviewItems);
   const [actionItems, setActionItems] = useState<ActionItem[]>(initialSnapshot.actionItems);
-  const [idsItems, setIdsItems] = useState<IdsItem[]>(initialSnapshot.idsItems);
 
   // Remember "who am I" across sessions (stands in for auth).
   useEffect(() => {
@@ -47,7 +47,7 @@ export function DailyBoard({ initialSnapshot, today, knownClients }: Props) {
     else window.localStorage.removeItem(MEMBER_KEY);
   };
 
-  // ─── Live master tables (to-dos + IDS) — not date-scoped ──────────────────
+  // ─── Live master table (to-dos) — not date-scoped ─────────────────────────
   useEffect(() => {
     const actionChannel = supabase
       .channel("daily:action_items")
@@ -68,28 +68,8 @@ export function DailyBoard({ initialSnapshot, today, knownClients }: Props) {
       )
       .subscribe();
 
-    const idsChannel = supabase
-      .channel("daily:ids_items")
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "ids_items" }, (payload) => {
-        const row = payload.new as IdsItem;
-        if (row.archived) return;
-        setIdsItems((prev) => (prev.some((p) => p.id === row.id) ? prev : [...prev, row]));
-      })
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "ids_items" }, (payload) => {
-        const row = payload.new as IdsItem;
-        // Archiving == "Solved": drop it from the open list immediately.
-        setIdsItems((prev) =>
-          row.archived ? prev.filter((p) => p.id !== row.id) : prev.map((p) => (p.id === row.id ? row : p))
-        );
-      })
-      .on("postgres_changes", { event: "DELETE", schema: "public", table: "ids_items" }, (payload) =>
-        setIdsItems((prev) => prev.filter((p) => p.id !== (payload.old as { id: number }).id))
-      )
-      .subscribe();
-
     return () => {
       supabase.removeChannel(actionChannel);
-      supabase.removeChannel(idsChannel);
     };
   }, [supabase]);
 
@@ -98,17 +78,25 @@ export function DailyBoard({ initialSnapshot, today, knownClients }: Props) {
     let active = true;
 
     (async () => {
-      const [checkinsResp, headlinesResp] = await Promise.all([
+      const [checkinsResp, headlinesResp, reviewResp] = await Promise.all([
         supabase.from("daily_checkins").select("*").eq("checkin_date", date),
         supabase
           .from("daily_headlines")
           .select("*")
           .eq("headline_date", date)
+          .order("created_at", { ascending: true }),
+        supabase
+          .from("daily_review_items")
+          .select("*")
+          .eq("review_date", date)
+          .order("done", { ascending: true })
+          .order("sort_order", { ascending: true })
           .order("created_at", { ascending: true })
       ]);
       if (!active) return;
       if (!checkinsResp.error) setCheckins(checkinsResp.data ?? []);
       if (!headlinesResp.error) setHeadlines(headlinesResp.data ?? []);
+      if (!reviewResp.error) setReviewItems(reviewResp.data ?? []);
     })();
 
     const checkinChannel = supabase
@@ -151,10 +139,31 @@ export function DailyBoard({ initialSnapshot, today, knownClients }: Props) {
       })
       .subscribe();
 
+    const reviewChannel = supabase
+      .channel(`daily:review:${date}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "daily_review_items" }, (payload) => {
+        if (payload.eventType === "DELETE") {
+          const oldId = (payload.old as { id: number }).id;
+          setReviewItems((prev) => prev.filter((r) => r.id !== oldId));
+          return;
+        }
+        const row = payload.new as DailyReviewItem;
+        if (row.review_date !== date) return;
+        setReviewItems((prev) => {
+          const idx = prev.findIndex((r) => r.id === row.id);
+          if (idx === -1) return [...prev, row];
+          const copy = [...prev];
+          copy[idx] = row;
+          return copy;
+        });
+      })
+      .subscribe();
+
     return () => {
       active = false;
       supabase.removeChannel(checkinChannel);
       supabase.removeChannel(headlineChannel);
+      supabase.removeChannel(reviewChannel);
     };
   }, [supabase, date]);
 
@@ -166,8 +175,8 @@ export function DailyBoard({ initialSnapshot, today, knownClients }: Props) {
     return [...set];
   }, [knownClients, headlines]);
 
-  // Render the four sections from the single AGENDA_ORDER constant (see daily.ts
-  // — flipping IDS/to-dos order is a one-line change there).
+  // Render the daily sections from the single AGENDA_ORDER constant (see
+  // daily.ts). IDS lives on the weekly board, not here.
   const sections: Record<(typeof AGENDA_ORDER)[number], React.ReactNode> = {
     checkin: <CheckinSection key="checkin" checkins={checkins} date={date} />,
     headlines: (
@@ -179,7 +188,9 @@ export function DailyBoard({ initialSnapshot, today, knownClients }: Props) {
         clients={clientOptions}
       />
     ),
-    ids: <IdsSection key="ids" items={idsItems} />,
+    review: (
+      <ReviewSection key="review" items={reviewItems} date={date} currentMember={currentMember} />
+    ),
     todos: <ActionItemsSection key="todos" items={actionItems} />
   };
 
@@ -194,7 +205,8 @@ export function DailyBoard({ initialSnapshot, today, knownClients }: Props) {
           onMemberChange={onMemberChange}
         />
         <p className="mt-1 text-sm text-text-muted">
-          Daily standup. Check-in and headlines are per-day; to-dos and IDS carry over until done.
+          Daily standup. Check-in, headlines, and items to review are per-day; to-dos carry over
+          until done. (IDS lives on the weekly board.)
         </p>
       </div>
 

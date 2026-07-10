@@ -1,17 +1,17 @@
 import { createClient } from "./supabase-server";
-import type { ActionItem, IdsItem } from "./l10";
-import type { DailyCheckin, DailyHeadline } from "./daily";
+import type { ActionItem } from "./l10";
+import type { DailyCheckin, DailyHeadline, DailyReviewItem } from "./daily";
 
 export type DailySnapshot = {
   date: string;
   checkins: DailyCheckin[];
   headlines: DailyHeadline[];
+  reviewItems: DailyReviewItem[];
   actionItems: ActionItem[];
-  idsItems: IdsItem[];
 };
 
 function emptySnapshot(date: string): DailySnapshot {
-  return { date, checkins: [], headlines: [], actionItems: [], idsItems: [] };
+  return { date, checkins: [], headlines: [], reviewItems: [], actionItems: [] };
 }
 
 export async function getDailySnapshot(date: string): Promise<DailySnapshot> {
@@ -32,12 +32,20 @@ export async function getDailySnapshot(date: string): Promise<DailySnapshot> {
 async function loadSnapshot(date: string): Promise<DailySnapshot> {
   const supabase = createClient();
 
-  const [checkinsResp, headlinesResp, actionResp, idsResp] = await Promise.all([
+  const [checkinsResp, headlinesResp, reviewResp, actionResp] = await Promise.all([
     supabase.from("daily_checkins").select("*").eq("checkin_date", date),
     supabase
       .from("daily_headlines")
       .select("*")
       .eq("headline_date", date)
+      .order("created_at", { ascending: true }),
+    // Open (unreviewed) first, then by sort order, then by creation.
+    supabase
+      .from("daily_review_items")
+      .select("*")
+      .eq("review_date", date)
+      .order("done", { ascending: true })
+      .order("sort_order", { ascending: true })
       .order("created_at", { ascending: true }),
     // Open items first, then by due date, then by creation — the L10 ordering.
     supabase
@@ -45,25 +53,24 @@ async function loadSnapshot(date: string): Promise<DailySnapshot> {
       .select("*")
       .order("done", { ascending: true })
       .order("due_date", { ascending: true, nullsFirst: false })
-      .order("created_at", { ascending: true }),
-    supabase
-      .from("ids_items")
-      .select("*")
-      .eq("archived", false)
       .order("created_at", { ascending: true })
   ]);
 
   if (checkinsResp.error) throw new Error(checkinsResp.error.message);
   if (headlinesResp.error) throw new Error(headlinesResp.error.message);
   if (actionResp.error) throw new Error(actionResp.error.message);
-  if (idsResp.error) throw new Error(idsResp.error.message);
+  // Non-fatal: if migration 008 (daily_review_items) hasn't been applied yet,
+  // render the rest of the board rather than blanking it — just skip this list.
+  if (reviewResp.error) {
+    console.error("daily_review_items unavailable (run migration 008?):", reviewResp.error.message);
+  }
 
   return {
     date,
     checkins: checkinsResp.data ?? [],
     headlines: headlinesResp.data ?? [],
-    actionItems: actionResp.data ?? [],
-    idsItems: idsResp.data ?? []
+    reviewItems: reviewResp.error ? [] : reviewResp.data ?? [],
+    actionItems: actionResp.data ?? []
   };
 }
 

@@ -100,6 +100,25 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["daily_headlines"]["Row"]>;
         Relationships: [];
       };
+      // Daily-specific: "items to review for the day" — a per-day checklist.
+      daily_review_items: {
+        Row: {
+          id: number;
+          review_date: string;
+          text: string;
+          done: boolean;
+          created_by: TeamMember | null;
+          sort_order: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: Partial<Database["public"]["Tables"]["daily_review_items"]["Row"]> & {
+          review_date: string;
+          text: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["daily_review_items"]["Row"]>;
+        Relationships: [];
+      };
       // Rocks meeting: the finalized deliverable. One rock per row. `owner` is
       // free text (rocks roster is wider than the team_member enum).
       rocks: {

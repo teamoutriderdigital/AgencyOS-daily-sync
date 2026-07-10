@@ -2,6 +2,7 @@ import type { AttendanceStatus, Tables } from "./database.types";
 
 export type DailyCheckin = Tables<"daily_checkins">;
 export type DailyHeadline = Tables<"daily_headlines">;
+export type DailyReviewItem = Tables<"daily_review_items">;
 
 // Attendance options for the daily check-in. The team is fully remote, so it's
 // simply who's at the standup: "Present" counts as in, "Out" does not.
@@ -22,11 +23,10 @@ export function attendanceClasses(status: AttendanceStatus, active: boolean): st
 export const CLIENTS = ["Redstone", "SBD", "COD", "Vital"];
 
 // ─── Agenda order ───────────────────────────────────────────────────────────
-// The four daily sections render from this single constant. The current team
-// order is IDS before to-dos. The standard L10 runs to-dos before IDS so that
-// slipped commitments become issues — flipping the order is a one-line change
-// here (swap "ids" and "todos").
-export const AGENDA_ORDER = ["checkin", "headlines", "ids", "todos"] as const;
+// The daily sections render from this single constant. IDS lives on the WEEKLY
+// board, not here — the daily standup runs check-in → headlines → items to
+// review for the day → to-dos. Reordering is a one-line change here.
+export const AGENDA_ORDER = ["checkin", "headlines", "review", "todos"] as const;
 export type AgendaSection = (typeof AGENDA_ORDER)[number];
 
 // ─── Date helpers ───────────────────────────────────────────────────────────
