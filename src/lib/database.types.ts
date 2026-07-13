@@ -119,6 +119,24 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["daily_review_items"]["Row"]>;
         Relationships: [];
       };
+      // Daily-specific: meeting rating 1–10, one row per (day, member).
+      meeting_ratings: {
+        Row: {
+          id: number;
+          rating_date: string;
+          member: TeamMember;
+          rating: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: Partial<Database["public"]["Tables"]["meeting_ratings"]["Row"]> & {
+          rating_date: string;
+          member: TeamMember;
+          rating: number;
+        };
+        Update: Partial<Database["public"]["Tables"]["meeting_ratings"]["Row"]>;
+        Relationships: [];
+      };
       // Rocks meeting: the finalized deliverable. One rock per row. `owner` is
       // free text (rocks roster is wider than the team_member enum).
       rocks: {

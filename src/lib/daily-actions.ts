@@ -116,3 +116,33 @@ export async function deleteReviewItem(id: number) {
   if (error) throw new Error(error.message);
   revalidateDaily();
 }
+
+// ─── Meeting rating (1–10) ───────────────────────────────────────────────────
+// One rating per (day, member). Passing a number upserts on the unique key;
+// passing null clears (deletes) that member's rating for the day.
+
+export async function setMeetingRating(input: {
+  rating_date: string;
+  member: TeamMember;
+  rating: number | null;
+}) {
+  const supabase = createClient();
+  if (input.rating == null) {
+    const { error } = await supabase
+      .from("meeting_ratings")
+      .delete()
+      .eq("rating_date", input.rating_date)
+      .eq("member", input.member);
+    if (error) throw new Error(error.message);
+    revalidateDaily();
+    return;
+  }
+  const rating = Math.round(input.rating);
+  if (rating < 1 || rating > 10) throw new Error("Rating must be between 1 and 10");
+  const { error } = await supabase.from("meeting_ratings").upsert(
+    { rating_date: input.rating_date, member: input.member, rating },
+    { onConflict: "rating_date,member" }
+  );
+  if (error) throw new Error(error.message);
+  revalidateDaily();
+}

@@ -3,6 +3,7 @@ import type { AttendanceStatus, Tables } from "./database.types";
 export type DailyCheckin = Tables<"daily_checkins">;
 export type DailyHeadline = Tables<"daily_headlines">;
 export type DailyReviewItem = Tables<"daily_review_items">;
+export type MeetingRating = Tables<"meeting_ratings">;
 
 // Attendance options for the daily check-in. The team is fully remote, so it's
 // simply who's at the standup: "Present" counts as in, "Out" does not.
@@ -26,7 +27,7 @@ export const CLIENTS = ["Redstone", "SBD", "COD", "Vital"];
 // The daily sections render from this single constant. IDS lives on the WEEKLY
 // board, not here — the daily standup runs check-in → headlines → items to
 // review for the day → to-dos. Reordering is a one-line change here.
-export const AGENDA_ORDER = ["checkin", "headlines", "review", "todos"] as const;
+export const AGENDA_ORDER = ["checkin", "headlines", "review", "todos", "rating"] as const;
 export type AgendaSection = (typeof AGENDA_ORDER)[number];
 
 // ─── Date helpers ───────────────────────────────────────────────────────────
