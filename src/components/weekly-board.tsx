@@ -6,11 +6,13 @@ import type { ActionItem, IdsItem } from "@/lib/l10";
 import type { Rock } from "@/lib/rocks";
 import { QUARTER } from "@/lib/rocks";
 import type { Client } from "@/lib/clients";
+import type { MeetingRating } from "@/lib/daily";
 import type { WeeklySnapshot } from "@/lib/weekly-server";
 import {
   currentIsoWeek,
   isoWeekLabel,
   isoWeekRangeLabel,
+  isoWeekStart,
   itemInWeek,
   shiftIsoWeek,
   type IsoWeek
@@ -20,6 +22,7 @@ import { IdsSection } from "./ids-section";
 import { ActionItemsSection } from "./action-items-section";
 import { RocksTrackerSection } from "./rocks-tracker-section";
 import { ClientStagesSection } from "./client-stages-section";
+import { RatingSection } from "./rating-section";
 
 type Props = { initialSnapshot: WeeklySnapshot };
 
@@ -35,7 +38,14 @@ export function WeeklyBoard({ initialSnapshot }: Props) {
   const [idsItems, setIdsItems] = useState<IdsItem[]>(initialSnapshot.idsItems);
   const [rocks, setRocks] = useState<Rock[]>(initialSnapshot.rocks);
   const [clients, setClients] = useState<Client[]>(initialSnapshot.clients);
+  const [ratings, setRatings] = useState<MeetingRating[]>(initialSnapshot.ratings);
   const [syncing, startSync] = useTransition();
+
+  // A week's meeting rating is stored under that week's Monday (UTC).
+  const ratingDate = useMemo(
+    () => isoWeekStart(selected.year, selected.week).toISOString().slice(0, 10),
+    [selected]
+  );
 
   // ─── Live master tables (to-dos + IDS + rocks) ────────────────────────────
   useEffect(() => {
@@ -120,6 +130,44 @@ export function WeeklyBoard({ initialSnapshot }: Props) {
     };
   }, [supabase]);
 
+  // ─── Meeting ratings — scoped to the selected week's Monday ────────────────
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      const { data, error } = await supabase
+        .from("meeting_ratings")
+        .select("*")
+        .eq("rating_date", ratingDate);
+      if (!active || error) return;
+      setRatings(data ?? []);
+    })();
+
+    const ratingChannel = supabase
+      .channel(`weekly:ratings:${ratingDate}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "meeting_ratings" }, (payload) => {
+        if (payload.eventType === "DELETE") {
+          const oldId = (payload.old as { id: number }).id;
+          setRatings((prev) => prev.filter((r) => r.id !== oldId));
+          return;
+        }
+        const row = payload.new as MeetingRating;
+        if (row.rating_date !== ratingDate) return;
+        setRatings((prev) => {
+          const idx = prev.findIndex((r) => r.id === row.id);
+          if (idx === -1) return [...prev, row];
+          const copy = [...prev];
+          copy[idx] = row;
+          return copy;
+        });
+      })
+      .subscribe();
+
+    return () => {
+      active = false;
+      supabase.removeChannel(ratingChannel);
+    };
+  }, [supabase, ratingDate]);
+
   const weekActions = useMemo(
     () => actionItems.filter((i) => itemInWeek(i, selected, current)),
     [actionItems, selected, current]
@@ -172,7 +220,7 @@ export function WeeklyBoard({ initialSnapshot }: Props) {
             )}
           </div>
           <p className="mt-1 text-sm text-text-muted">
-            {isoWeekRangeLabel(selected)} · weekly L10 — rocks, IDS, and to-dos for the week.
+            {isoWeekRangeLabel(selected)} · weekly L10 — rocks, IDS, to-dos, and meeting rating for the week.
           </p>
         </div>
 
@@ -197,6 +245,7 @@ export function WeeklyBoard({ initialSnapshot }: Props) {
       <ClientStagesSection clients={clients} />
       <IdsSection items={weekIds} />
       <ActionItemsSection items={weekActions} />
+      <RatingSection ratings={ratings} date={ratingDate} />
     </div>
   );
 }

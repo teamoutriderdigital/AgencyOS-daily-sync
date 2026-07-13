@@ -1,6 +1,6 @@
 import { createClient } from "./supabase-server";
 import type { ActionItem } from "./l10";
-import type { DailyCheckin, DailyHeadline, DailyReviewItem, MeetingRating } from "./daily";
+import type { DailyCheckin, DailyHeadline, DailyReviewItem } from "./daily";
 
 export type DailySnapshot = {
   date: string;
@@ -8,11 +8,10 @@ export type DailySnapshot = {
   headlines: DailyHeadline[];
   reviewItems: DailyReviewItem[];
   actionItems: ActionItem[];
-  ratings: MeetingRating[];
 };
 
 function emptySnapshot(date: string): DailySnapshot {
-  return { date, checkins: [], headlines: [], reviewItems: [], actionItems: [], ratings: [] };
+  return { date, checkins: [], headlines: [], reviewItems: [], actionItems: [] };
 }
 
 export async function getDailySnapshot(date: string): Promise<DailySnapshot> {
@@ -33,7 +32,7 @@ export async function getDailySnapshot(date: string): Promise<DailySnapshot> {
 async function loadSnapshot(date: string): Promise<DailySnapshot> {
   const supabase = createClient();
 
-  const [checkinsResp, headlinesResp, reviewResp, actionResp, ratingsResp] = await Promise.all([
+  const [checkinsResp, headlinesResp, reviewResp, actionResp] = await Promise.all([
     supabase.from("daily_checkins").select("*").eq("checkin_date", date),
     supabase
       .from("daily_headlines")
@@ -54,20 +53,16 @@ async function loadSnapshot(date: string): Promise<DailySnapshot> {
       .select("*")
       .order("done", { ascending: true })
       .order("due_date", { ascending: true, nullsFirst: false })
-      .order("created_at", { ascending: true }),
-    supabase.from("meeting_ratings").select("*").eq("rating_date", date)
+      .order("created_at", { ascending: true })
   ]);
 
   if (checkinsResp.error) throw new Error(checkinsResp.error.message);
   if (headlinesResp.error) throw new Error(headlinesResp.error.message);
   if (actionResp.error) throw new Error(actionResp.error.message);
-  // Non-fatal: if a later migration hasn't been applied yet, render the rest of
-  // the board rather than blanking it — just skip that list.
+  // Non-fatal: if migration 008 (daily_review_items) hasn't been applied yet,
+  // render the rest of the board rather than blanking it — just skip this list.
   if (reviewResp.error) {
     console.error("daily_review_items unavailable (run migration 008?):", reviewResp.error.message);
-  }
-  if (ratingsResp.error) {
-    console.error("meeting_ratings unavailable (run migration 009?):", ratingsResp.error.message);
   }
 
   return {
@@ -75,8 +70,7 @@ async function loadSnapshot(date: string): Promise<DailySnapshot> {
     checkins: checkinsResp.data ?? [],
     headlines: headlinesResp.data ?? [],
     reviewItems: reviewResp.error ? [] : reviewResp.data ?? [],
-    actionItems: actionResp.data ?? [],
-    ratings: ratingsResp.error ? [] : ratingsResp.data ?? []
+    actionItems: actionResp.data ?? []
   };
 }
 

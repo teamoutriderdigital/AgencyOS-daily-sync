@@ -3,14 +3,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import type { ActionItem } from "@/lib/l10";
-import type { DailyCheckin, DailyHeadline, DailyReviewItem, MeetingRating } from "@/lib/daily";
+import type { DailyCheckin, DailyHeadline, DailyReviewItem } from "@/lib/daily";
 import { AGENDA_ORDER } from "@/lib/daily";
 import type { DailySnapshot } from "@/lib/daily-server";
 import type { TeamMember } from "@/lib/database.types";
 import { OWNERS } from "@/lib/team";
 import { ActionItemsSection } from "./action-items-section";
 import { ReviewSection } from "./review-section";
-import { RatingSection } from "./rating-section";
 import { DateHeader } from "./date-header";
 import { CheckinSection } from "./checkin-section";
 import { HeadlinesSection } from "./headlines-section";
@@ -36,7 +35,6 @@ export function DailyBoard({ initialSnapshot, today, knownClients }: Props) {
   const [headlines, setHeadlines] = useState<DailyHeadline[]>(initialSnapshot.headlines);
   const [reviewItems, setReviewItems] = useState<DailyReviewItem[]>(initialSnapshot.reviewItems);
   const [actionItems, setActionItems] = useState<ActionItem[]>(initialSnapshot.actionItems);
-  const [ratings, setRatings] = useState<MeetingRating[]>(initialSnapshot.ratings);
 
   // Remember "who am I" across sessions (stands in for auth).
   useEffect(() => {
@@ -80,7 +78,7 @@ export function DailyBoard({ initialSnapshot, today, knownClients }: Props) {
     let active = true;
 
     (async () => {
-      const [checkinsResp, headlinesResp, reviewResp, ratingsResp] = await Promise.all([
+      const [checkinsResp, headlinesResp, reviewResp] = await Promise.all([
         supabase.from("daily_checkins").select("*").eq("checkin_date", date),
         supabase
           .from("daily_headlines")
@@ -93,14 +91,12 @@ export function DailyBoard({ initialSnapshot, today, knownClients }: Props) {
           .eq("review_date", date)
           .order("done", { ascending: true })
           .order("sort_order", { ascending: true })
-          .order("created_at", { ascending: true }),
-        supabase.from("meeting_ratings").select("*").eq("rating_date", date)
+          .order("created_at", { ascending: true })
       ]);
       if (!active) return;
       if (!checkinsResp.error) setCheckins(checkinsResp.data ?? []);
       if (!headlinesResp.error) setHeadlines(headlinesResp.data ?? []);
       if (!reviewResp.error) setReviewItems(reviewResp.data ?? []);
-      if (!ratingsResp.error) setRatings(ratingsResp.data ?? []);
     })();
 
     const checkinChannel = supabase
@@ -163,32 +159,11 @@ export function DailyBoard({ initialSnapshot, today, knownClients }: Props) {
       })
       .subscribe();
 
-    const ratingChannel = supabase
-      .channel(`daily:ratings:${date}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "meeting_ratings" }, (payload) => {
-        if (payload.eventType === "DELETE") {
-          const oldId = (payload.old as { id: number }).id;
-          setRatings((prev) => prev.filter((r) => r.id !== oldId));
-          return;
-        }
-        const row = payload.new as MeetingRating;
-        if (row.rating_date !== date) return;
-        setRatings((prev) => {
-          const idx = prev.findIndex((r) => r.id === row.id);
-          if (idx === -1) return [...prev, row];
-          const copy = [...prev];
-          copy[idx] = row;
-          return copy;
-        });
-      })
-      .subscribe();
-
     return () => {
       active = false;
       supabase.removeChannel(checkinChannel);
       supabase.removeChannel(headlineChannel);
       supabase.removeChannel(reviewChannel);
-      supabase.removeChannel(ratingChannel);
     };
   }, [supabase, date]);
 
@@ -216,8 +191,7 @@ export function DailyBoard({ initialSnapshot, today, knownClients }: Props) {
     review: (
       <ReviewSection key="review" items={reviewItems} date={date} currentMember={currentMember} />
     ),
-    todos: <ActionItemsSection key="todos" items={actionItems} />,
-    rating: <RatingSection key="rating" ratings={ratings} date={date} />
+    todos: <ActionItemsSection key="todos" items={actionItems} />
   };
 
   return (
