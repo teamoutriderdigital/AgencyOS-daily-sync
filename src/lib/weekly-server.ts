@@ -30,7 +30,7 @@ export async function getWeeklySnapshot(): Promise<WeeklySnapshot> {
         .order("done", { ascending: true })
         .order("due_date", { ascending: true, nullsFirst: false })
         .order("created_at", { ascending: true }),
-      supabase.from("ids_items").select("*").eq("archived", false).order("created_at", { ascending: true }),
+      supabase.from("ids_items").select("*").eq("archived", false).order("created_at", { ascending: false }),
       supabase
         .from("rocks")
         .select("*")

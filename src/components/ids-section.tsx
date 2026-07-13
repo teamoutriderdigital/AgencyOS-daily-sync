@@ -29,7 +29,11 @@ export function IdsSection({ items }: { items: IdsItem[] }) {
   const sorted = useMemo(() => {
     const priorityRank: Record<string, number> = { High: 0, Medium: 1 };
     return [...items].sort((a, b) => {
-      // Most-upvoted first, then priority, then soonest due.
+      // Newest first — the issue created today sits at the top, then older ones.
+      // Ties (same timestamp) fall back to most-upvoted, then priority, then due.
+      const ac = new Date(a.created_at).getTime();
+      const bc = new Date(b.created_at).getTime();
+      if (bc !== ac) return bc - ac;
       if (b.upvotes !== a.upvotes) return b.upvotes - a.upvotes;
       const pr = (priorityRank[a.priority ?? ""] ?? 99) - (priorityRank[b.priority ?? ""] ?? 99);
       if (pr !== 0) return pr;
