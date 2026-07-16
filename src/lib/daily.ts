@@ -2,6 +2,7 @@ import type { AttendanceStatus, Tables } from "./database.types";
 
 export type DailyCheckin = Tables<"daily_checkins">;
 export type DailyHeadline = Tables<"daily_headlines">;
+export type HeadlineTask = Tables<"headline_tasks">;
 export type DailyReviewItem = Tables<"daily_review_items">;
 export type MeetingRating = Tables<"meeting_ratings">;
 

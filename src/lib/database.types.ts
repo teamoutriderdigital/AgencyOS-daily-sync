@@ -90,6 +90,7 @@ export interface Database {
           client: string | null;
           text: string;
           created_by: TeamMember | null;
+          owner: TeamMember | null;
           created_at: string;
           updated_at: string;
         };
@@ -98,6 +99,27 @@ export interface Database {
           text: string;
         };
         Update: Partial<Database["public"]["Tables"]["daily_headlines"]["Row"]>;
+        Relationships: [];
+      };
+      // Daily-specific: per-bullet tasks under a client headline, each with an
+      // optional owner. Denormalized headline_date for date-scoped queries.
+      headline_tasks: {
+        Row: {
+          id: number;
+          headline_id: number;
+          headline_date: string;
+          text: string;
+          owner: TeamMember | null;
+          sort_order: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: Partial<Database["public"]["Tables"]["headline_tasks"]["Row"]> & {
+          headline_id: number;
+          headline_date: string;
+          text: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["headline_tasks"]["Row"]>;
         Relationships: [];
       };
       // Daily-specific: "items to review for the day" — a per-day checklist.

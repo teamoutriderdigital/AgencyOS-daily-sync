@@ -1,27 +1,49 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { cn } from "@/lib/utils";
-import { createHeadline, deleteHeadline, updateHeadline } from "@/lib/daily-actions";
-import type { DailyHeadline } from "@/lib/daily";
+import {
+  addHeadlineTask,
+  createHeadline,
+  deleteHeadline,
+  deleteHeadlineTask,
+  setHeadlineOwner,
+  updateHeadline,
+  updateHeadlineTask
+} from "@/lib/daily-actions";
+import type { DailyHeadline, HeadlineTask } from "@/lib/daily";
 import type { TeamMember } from "@/lib/database.types";
+import { OWNERS } from "@/lib/team";
 import { SectionShell } from "./section-shell";
 import { ClientChips } from "./client-chips";
 
 // One entry per client for the selected day. Pick a client, then type the
-// update — use new lines for bullets. The add form is always visible at the top
-// with the client chips (Redstone / SBD / COD / Vital / used-before / + Other).
+// update — new lines starting with "•"/"-" become individual tasks, each of
+// which can be given an owner. The headline itself also has a client-level
+// owner (the lead). The add form is always visible at the top.
 export function HeadlinesSection({
   headlines,
+  tasks,
   date,
   currentMember,
   clients = []
 }: {
   headlines: DailyHeadline[];
+  tasks: HeadlineTask[];
   date: string;
   currentMember: TeamMember | null;
   clients?: string[];
 }) {
+  const tasksByHeadline = useMemo(() => {
+    const map = new Map<number, HeadlineTask[]>();
+    for (const t of tasks) {
+      const arr = map.get(t.headline_id) ?? [];
+      arr.push(t);
+      map.set(t.headline_id, arr);
+    }
+    return map;
+  }, [tasks]);
+
   return (
     <SectionShell title="Client headlines" count={headlines.length} countLabel="headlines">
       <AddHeadlineForm date={date} currentMember={currentMember} clients={clients} />
@@ -32,15 +54,48 @@ export function HeadlinesSection({
           </p>
         )}
         {headlines.map((h) => (
-          <HeadlineRow key={h.id} headline={h} clients={clients} />
+          <HeadlineRow
+            key={h.id}
+            headline={h}
+            tasks={tasksByHeadline.get(h.id) ?? []}
+            clients={clients}
+          />
         ))}
       </div>
     </SectionShell>
   );
 }
 
+// Small owner picker shared by the headline lead and each task.
+function OwnerSelect({
+  value,
+  onChange,
+  label = "owner"
+}: {
+  value: TeamMember | null;
+  onChange: (v: TeamMember | null) => void;
+  label?: string;
+}) {
+  return (
+    <select
+      value={value ?? ""}
+      onChange={(e) => onChange((e.target.value as TeamMember) || null)}
+      className="flex-shrink-0 rounded-md border border-border bg-surface px-2 py-1 text-xs text-text-muted"
+      title="Owner"
+    >
+      <option value="">— {label} —</option>
+      {OWNERS.map((o) => (
+        <option key={o} value={o}>
+          {o}
+        </option>
+      ))}
+    </select>
+  );
+}
+
 // Persistent add bar — chips always on screen; saving clears and keeps it ready.
-// The text is a textarea so you can enter multiple bullet lines.
+// The text is a textarea so you can enter multiple bullet lines (each becomes a
+// task you can assign an owner to).
 function AddHeadlineForm({
   date,
   currentMember,
@@ -75,7 +130,7 @@ function AddHeadlineForm({
           onKeyDown={(e) => {
             if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) save();
           }}
-          placeholder={"What's the update? One line each for bullets.\n• …\n• …"}
+          placeholder={"What's the update? One line each for bullets — each becomes a task.\n• …\n• …"}
           className="min-w-0 flex-1 resize-y rounded-md border border-border bg-surface px-2 py-1 text-sm text-text"
         />
         <button
@@ -91,44 +146,113 @@ function AddHeadlineForm({
   );
 }
 
-// Render a headline body nicely: an "Owner: … · Status" first line becomes a
-// small header, "•"/"-" lines become proper bullets, everything else is a plain
-// wrapped line.
-function HeadlineBody({ text }: { text: string }) {
+// Render the non-bullet lines of a headline as its summary. Bullet lines are
+// rendered separately as tasks (see TaskList), so they're skipped here.
+function HeadlineSummary({ text }: { text: string }) {
   const lines = text
     .split("\n")
     .map((l) => l.trim())
-    .filter(Boolean);
+    .filter(Boolean)
+    .filter((l) => !(l.startsWith("•") || l.startsWith("-")));
+
+  if (lines.length === 0) return null;
 
   return (
     <div className="min-w-0 flex-1 space-y-1">
       {lines.map((line, i) => {
         if (/^owner\s*:/i.test(line)) {
           return (
-            <p
-              key={i}
-              className="text-xs font-semibold uppercase tracking-wide text-text-muted"
-            >
+            <p key={i} className="text-xs font-semibold uppercase tracking-wide text-text-muted">
               {line}
             </p>
           );
         }
-        const isBullet = line.startsWith("•") || line.startsWith("-");
-        const content = isBullet ? line.replace(/^[•-]\s*/, "") : line;
         return (
-          <div key={i} className="flex gap-2 text-sm text-text">
-            {isBullet && (
-              <span className="mt-[7px] h-1.5 w-1.5 flex-shrink-0 rounded-full bg-accent/60" />
-            )}
-            <span className="min-w-0 break-words leading-snug">{content}</span>
-          </div>
+          <p key={i} className="min-w-0 break-words text-sm leading-snug text-text">
+            {line}
+          </p>
         );
       })}
     </div>
   );
 }
 
-function HeadlineRow({ headline, clients }: { headline: DailyHeadline; clients: string[] }) {
+function TaskRow({ task }: { task: HeadlineTask }) {
+  const [, startTransition] = useTransition();
+  return (
+    <div className="flex items-center gap-2">
+      <span className="h-1.5 w-1.5 flex-shrink-0 rounded-full bg-accent/60" />
+      <input
+        type="text"
+        defaultValue={task.text}
+        onBlur={(e) => {
+          const v = e.target.value.trim();
+          if (v && v !== task.text) startTransition(() => updateHeadlineTask(task.id, { text: v }));
+        }}
+        className="min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-2 py-1 text-sm text-text hover:border-border focus:border-accent/50 focus:outline-none"
+      />
+      <OwnerSelect
+        value={task.owner}
+        onChange={(v) => startTransition(() => updateHeadlineTask(task.id, { owner: v }))}
+      />
+      <button
+        type="button"
+        onClick={() => {
+          if (confirm("Delete this task?")) startTransition(() => deleteHeadlineTask(task.id));
+        }}
+        className="flex-shrink-0 text-xs text-text-muted hover:text-red-600"
+        title="Delete task"
+      >
+        ✕
+      </button>
+    </div>
+  );
+}
+
+function AddTaskInline({ headline }: { headline: DailyHeadline }) {
+  const [text, setText] = useState("");
+  const [pending, startTransition] = useTransition();
+
+  const save = () => {
+    const v = text.trim();
+    if (!v) return;
+    startTransition(async () => {
+      await addHeadlineTask({
+        headline_id: headline.id,
+        headline_date: headline.headline_date,
+        text: v
+      });
+      setText("");
+    });
+  };
+
+  return (
+    <div className="flex items-center gap-2">
+      <span className="w-1.5 flex-shrink-0 text-center text-text-muted">＋</span>
+      <input
+        type="text"
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") save();
+        }}
+        placeholder="Add a task…"
+        disabled={pending}
+        className="min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-2 py-1 text-sm text-text-muted hover:border-border focus:border-accent/50 focus:text-text focus:outline-none"
+      />
+    </div>
+  );
+}
+
+function HeadlineRow({
+  headline,
+  tasks,
+  clients
+}: {
+  headline: DailyHeadline;
+  tasks: HeadlineTask[];
+  clients: string[];
+}) {
   const [editing, setEditing] = useState(false);
   const [client, setClient] = useState<string | null>(headline.client);
   const [text, setText] = useState(headline.text);
@@ -178,40 +302,57 @@ function HeadlineRow({ headline, clients }: { headline: DailyHeadline; clients: 
             </button>
           </div>
         </div>
+        <p className="text-xs italic text-text-muted">
+          Editing the summary here won&apos;t change existing tasks — manage those below.
+        </p>
       </div>
     );
   }
 
   return (
-    <div className="flex items-start gap-3 px-5 py-3">
-      {headline.client ? (
-        <span className="mt-0.5 w-24 flex-shrink-0 truncate rounded-full border border-border bg-surface-alt px-2 py-0.5 text-center text-xs font-semibold text-text-muted">
-          {headline.client}
-        </span>
-      ) : (
-        <span className="mt-0.5 w-24 flex-shrink-0 text-xs italic text-text-muted">—</span>
-      )}
-      <HeadlineBody text={headline.text} />
-      <button
-        type="button"
-        onClick={() => setEditing(true)}
-        className="mt-0.5 text-xs text-text-muted hover:text-accent"
-        title="Edit"
-      >
-        ✏️
-      </button>
-      <button
-        type="button"
-        onClick={() => {
-          if (confirm("Delete this headline?")) {
-            startTransition(() => deleteHeadline(headline.id));
-          }
-        }}
-        className={cn("mt-0.5 text-xs text-text-muted hover:text-red-600", pending && "opacity-50")}
-        title="Delete"
-      >
-        🗑️
-      </button>
+    <div className="space-y-2 px-5 py-3">
+      <div className="flex items-start gap-3">
+        {headline.client ? (
+          <span className="mt-0.5 w-24 flex-shrink-0 truncate rounded-full border border-border bg-surface-alt px-2 py-0.5 text-center text-xs font-semibold text-text-muted">
+            {headline.client}
+          </span>
+        ) : (
+          <span className="mt-0.5 w-24 flex-shrink-0 text-xs italic text-text-muted">—</span>
+        )}
+        <HeadlineSummary text={headline.text} />
+        <OwnerSelect
+          value={headline.owner}
+          label="lead"
+          onChange={(v) => startTransition(() => setHeadlineOwner(headline.id, v))}
+        />
+        <button
+          type="button"
+          onClick={() => setEditing(true)}
+          className="mt-0.5 flex-shrink-0 text-xs text-text-muted hover:text-accent"
+          title="Edit"
+        >
+          ✏️
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            if (confirm("Delete this headline and its tasks?")) {
+              startTransition(() => deleteHeadline(headline.id));
+            }
+          }}
+          className={cn("mt-0.5 flex-shrink-0 text-xs text-text-muted hover:text-red-600", pending && "opacity-50")}
+          title="Delete"
+        >
+          🗑️
+        </button>
+      </div>
+
+      <div className="space-y-1 pl-[7.5rem]">
+        {tasks.map((t) => (
+          <TaskRow key={t.id} task={t} />
+        ))}
+        <AddTaskInline headline={headline} />
+      </div>
     </div>
   );
 }

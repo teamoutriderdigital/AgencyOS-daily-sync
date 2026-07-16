@@ -1,17 +1,18 @@
 import { createClient } from "./supabase-server";
 import type { ActionItem } from "./l10";
-import type { DailyCheckin, DailyHeadline, DailyReviewItem } from "./daily";
+import type { DailyCheckin, DailyHeadline, DailyReviewItem, HeadlineTask } from "./daily";
 
 export type DailySnapshot = {
   date: string;
   checkins: DailyCheckin[];
   headlines: DailyHeadline[];
+  headlineTasks: HeadlineTask[];
   reviewItems: DailyReviewItem[];
   actionItems: ActionItem[];
 };
 
 function emptySnapshot(date: string): DailySnapshot {
-  return { date, checkins: [], headlines: [], reviewItems: [], actionItems: [] };
+  return { date, checkins: [], headlines: [], headlineTasks: [], reviewItems: [], actionItems: [] };
 }
 
 export async function getDailySnapshot(date: string): Promise<DailySnapshot> {
@@ -32,12 +33,18 @@ export async function getDailySnapshot(date: string): Promise<DailySnapshot> {
 async function loadSnapshot(date: string): Promise<DailySnapshot> {
   const supabase = createClient();
 
-  const [checkinsResp, headlinesResp, reviewResp, actionResp] = await Promise.all([
+  const [checkinsResp, headlinesResp, headlineTasksResp, reviewResp, actionResp] = await Promise.all([
     supabase.from("daily_checkins").select("*").eq("checkin_date", date),
     supabase
       .from("daily_headlines")
       .select("*")
       .eq("headline_date", date)
+      .order("created_at", { ascending: true }),
+    supabase
+      .from("headline_tasks")
+      .select("*")
+      .eq("headline_date", date)
+      .order("sort_order", { ascending: true })
       .order("created_at", { ascending: true }),
     // Open (unreviewed) first, then by sort order, then by creation.
     supabase
@@ -59,16 +66,20 @@ async function loadSnapshot(date: string): Promise<DailySnapshot> {
   if (checkinsResp.error) throw new Error(checkinsResp.error.message);
   if (headlinesResp.error) throw new Error(headlinesResp.error.message);
   if (actionResp.error) throw new Error(actionResp.error.message);
-  // Non-fatal: if migration 008 (daily_review_items) hasn't been applied yet,
-  // render the rest of the board rather than blanking it — just skip this list.
+  // Non-fatal: if a later migration hasn't been applied yet, render the rest of
+  // the board rather than blanking it — just skip that list.
   if (reviewResp.error) {
     console.error("daily_review_items unavailable (run migration 008?):", reviewResp.error.message);
+  }
+  if (headlineTasksResp.error) {
+    console.error("headline_tasks unavailable (run migration 010?):", headlineTasksResp.error.message);
   }
 
   return {
     date,
     checkins: checkinsResp.data ?? [],
     headlines: headlinesResp.data ?? [],
+    headlineTasks: headlineTasksResp.error ? [] : headlineTasksResp.data ?? [],
     reviewItems: reviewResp.error ? [] : reviewResp.data ?? [],
     actionItems: actionResp.data ?? []
   };
@@ -94,6 +105,29 @@ export async function getKnownClients(): Promise<string[]> {
     return [...set].sort((a, b) => a.localeCompare(b));
   } catch (e) {
     console.error("getKnownClients failed:", e);
+    return [];
+  }
+}
+
+// Headline tasks for a single date — used by the dashboard's headlines panel
+// (same HeadlinesSection). Degrades to an empty list on any error (e.g. before
+// migration 010 is applied) so the panel still renders.
+export async function getHeadlineTasks(date: string): Promise<HeadlineTask[]> {
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+    return [];
+  }
+  try {
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .from("headline_tasks")
+      .select("*")
+      .eq("headline_date", date)
+      .order("sort_order", { ascending: true })
+      .order("created_at", { ascending: true });
+    if (error) throw new Error(error.message);
+    return data ?? [];
+  } catch (e) {
+    console.error("getHeadlineTasks failed:", e);
     return [];
   }
 }

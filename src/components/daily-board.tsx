@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import type { ActionItem } from "@/lib/l10";
-import type { DailyCheckin, DailyHeadline, DailyReviewItem } from "@/lib/daily";
+import type { DailyCheckin, DailyHeadline, DailyReviewItem, HeadlineTask } from "@/lib/daily";
 import { AGENDA_ORDER } from "@/lib/daily";
 import type { DailySnapshot } from "@/lib/daily-server";
 import type { TeamMember } from "@/lib/database.types";
@@ -33,6 +33,7 @@ export function DailyBoard({ initialSnapshot, today, knownClients }: Props) {
   const [currentMember, setCurrentMember] = useState<TeamMember | null>(null);
   const [checkins, setCheckins] = useState<DailyCheckin[]>(initialSnapshot.checkins);
   const [headlines, setHeadlines] = useState<DailyHeadline[]>(initialSnapshot.headlines);
+  const [headlineTasks, setHeadlineTasks] = useState<HeadlineTask[]>(initialSnapshot.headlineTasks);
   const [reviewItems, setReviewItems] = useState<DailyReviewItem[]>(initialSnapshot.reviewItems);
   const [actionItems, setActionItems] = useState<ActionItem[]>(initialSnapshot.actionItems);
 
@@ -78,12 +79,18 @@ export function DailyBoard({ initialSnapshot, today, knownClients }: Props) {
     let active = true;
 
     (async () => {
-      const [checkinsResp, headlinesResp, reviewResp] = await Promise.all([
+      const [checkinsResp, headlinesResp, headlineTasksResp, reviewResp] = await Promise.all([
         supabase.from("daily_checkins").select("*").eq("checkin_date", date),
         supabase
           .from("daily_headlines")
           .select("*")
           .eq("headline_date", date)
+          .order("created_at", { ascending: true }),
+        supabase
+          .from("headline_tasks")
+          .select("*")
+          .eq("headline_date", date)
+          .order("sort_order", { ascending: true })
           .order("created_at", { ascending: true }),
         supabase
           .from("daily_review_items")
@@ -96,6 +103,7 @@ export function DailyBoard({ initialSnapshot, today, knownClients }: Props) {
       if (!active) return;
       if (!checkinsResp.error) setCheckins(checkinsResp.data ?? []);
       if (!headlinesResp.error) setHeadlines(headlinesResp.data ?? []);
+      if (!headlineTasksResp.error) setHeadlineTasks(headlineTasksResp.data ?? []);
       if (!reviewResp.error) setReviewItems(reviewResp.data ?? []);
     })();
 
@@ -139,6 +147,26 @@ export function DailyBoard({ initialSnapshot, today, knownClients }: Props) {
       })
       .subscribe();
 
+    const headlineTaskChannel = supabase
+      .channel(`daily:headline_tasks:${date}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "headline_tasks" }, (payload) => {
+        if (payload.eventType === "DELETE") {
+          const oldId = (payload.old as { id: number }).id;
+          setHeadlineTasks((prev) => prev.filter((t) => t.id !== oldId));
+          return;
+        }
+        const row = payload.new as HeadlineTask;
+        if (row.headline_date !== date) return;
+        setHeadlineTasks((prev) => {
+          const idx = prev.findIndex((t) => t.id === row.id);
+          if (idx === -1) return [...prev, row];
+          const copy = [...prev];
+          copy[idx] = row;
+          return copy;
+        });
+      })
+      .subscribe();
+
     const reviewChannel = supabase
       .channel(`daily:review:${date}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "daily_review_items" }, (payload) => {
@@ -163,6 +191,7 @@ export function DailyBoard({ initialSnapshot, today, knownClients }: Props) {
       active = false;
       supabase.removeChannel(checkinChannel);
       supabase.removeChannel(headlineChannel);
+      supabase.removeChannel(headlineTaskChannel);
       supabase.removeChannel(reviewChannel);
     };
   }, [supabase, date]);
@@ -183,6 +212,7 @@ export function DailyBoard({ initialSnapshot, today, knownClients }: Props) {
       <HeadlinesSection
         key="headlines"
         headlines={headlines}
+        tasks={headlineTasks}
         date={date}
         currentMember={currentMember}
         clients={clientOptions}

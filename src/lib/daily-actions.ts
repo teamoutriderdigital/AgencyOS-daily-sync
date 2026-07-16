@@ -40,16 +40,94 @@ export type HeadlineInput = {
   created_by?: TeamMember | null;
 };
 
+// Bullet lines ("• …" / "- …") become individual headline_tasks so each can
+// carry its own owner. Non-bullet lines stay as the headline's summary text.
+function bulletLines(text: string): string[] {
+  return text
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l.startsWith("•") || l.startsWith("-"))
+    .map((l) => l.replace(/^[•-]\s*/, "").trim())
+    .filter(Boolean);
+}
+
 export async function createHeadline(input: HeadlineInput) {
   const supabase = createClient();
   const text = input.text.trim();
   if (!text) throw new Error("Headline text is required");
-  const { error } = await supabase.from("daily_headlines").insert({
+  const { data, error } = await supabase
+    .from("daily_headlines")
+    .insert({
+      headline_date: input.headline_date,
+      client: input.client?.trim() || null,
+      text,
+      created_by: input.created_by ?? null
+    })
+    .select()
+    .single();
+  if (error) throw new Error(error.message);
+
+  // Split the bullet lines into per-task rows (owners set later on each row).
+  const bullets = bulletLines(text);
+  if (bullets.length) {
+    const rows = bullets.map((t, i) => ({
+      headline_id: data.id,
+      headline_date: input.headline_date,
+      text: t,
+      sort_order: i
+    }));
+    const { error: taskErr } = await supabase.from("headline_tasks").insert(rows);
+    if (taskErr) throw new Error(taskErr.message);
+  }
+  revalidateDaily();
+}
+
+// ─── Headline owner (client-level) ───────────────────────────────────────────
+
+export async function setHeadlineOwner(id: number, owner: TeamMember | null) {
+  const supabase = createClient();
+  const { error } = await supabase.from("daily_headlines").update({ owner }).eq("id", id);
+  if (error) throw new Error(error.message);
+  revalidateDaily();
+}
+
+// ─── Headline tasks (per-bullet, each with its own owner) ────────────────────
+
+export async function addHeadlineTask(input: {
+  headline_id: number;
+  headline_date: string;
+  text: string;
+  owner?: TeamMember | null;
+}) {
+  const supabase = createClient();
+  const text = input.text.trim();
+  if (!text) throw new Error("Task text is required");
+  const { error } = await supabase.from("headline_tasks").insert({
+    headline_id: input.headline_id,
     headline_date: input.headline_date,
-    client: input.client?.trim() || null,
     text,
-    created_by: input.created_by ?? null
+    owner: input.owner ?? null
   });
+  if (error) throw new Error(error.message);
+  revalidateDaily();
+}
+
+export async function updateHeadlineTask(
+  id: number,
+  input: Partial<{ text: string; owner: TeamMember | null }>
+) {
+  const supabase = createClient();
+  const patch: Record<string, unknown> = {};
+  if ("text" in input) patch.text = input.text?.trim() || "";
+  if ("owner" in input) patch.owner = input.owner ?? null;
+  const { error } = await supabase.from("headline_tasks").update(patch).eq("id", id);
+  if (error) throw new Error(error.message);
+  revalidateDaily();
+}
+
+export async function deleteHeadlineTask(id: number) {
+  const supabase = createClient();
+  const { error } = await supabase.from("headline_tasks").delete().eq("id", id);
   if (error) throw new Error(error.message);
   revalidateDaily();
 }
