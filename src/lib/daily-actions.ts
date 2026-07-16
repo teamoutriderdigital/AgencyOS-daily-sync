@@ -114,12 +114,13 @@ export async function addHeadlineTask(input: {
 
 export async function updateHeadlineTask(
   id: number,
-  input: Partial<{ text: string; owner: TeamMember | null }>
+  input: Partial<{ text: string; owner: TeamMember | null; done: boolean }>
 ) {
   const supabase = createClient();
   const patch: Record<string, unknown> = {};
   if ("text" in input) patch.text = input.text?.trim() || "";
   if ("owner" in input) patch.owner = input.owner ?? null;
+  if ("done" in input) patch.done = input.done;
   const { error } = await supabase.from("headline_tasks").update(patch).eq("id", id);
   if (error) throw new Error(error.message);
   revalidateDaily();

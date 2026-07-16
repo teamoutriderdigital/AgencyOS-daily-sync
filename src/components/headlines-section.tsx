@@ -181,7 +181,15 @@ function TaskRow({ task }: { task: HeadlineTask }) {
   const [, startTransition] = useTransition();
   return (
     <div className="flex items-center gap-2">
-      <span className="h-1.5 w-1.5 flex-shrink-0 rounded-full bg-accent/60" />
+      <input
+        type="checkbox"
+        checked={task.done}
+        onChange={(e) =>
+          startTransition(() => updateHeadlineTask(task.id, { done: e.target.checked }))
+        }
+        className="h-4 w-4 flex-shrink-0 cursor-pointer accent-accent"
+        title={task.done ? "Completed" : "Mark completed"}
+      />
       <input
         type="text"
         defaultValue={task.text}
@@ -189,7 +197,10 @@ function TaskRow({ task }: { task: HeadlineTask }) {
           const v = e.target.value.trim();
           if (v && v !== task.text) startTransition(() => updateHeadlineTask(task.id, { text: v }));
         }}
-        className="min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-2 py-1 text-sm text-text hover:border-border focus:border-accent/50 focus:outline-none"
+        className={cn(
+          "min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-2 py-1 text-sm text-text hover:border-border focus:border-accent/50 focus:outline-none",
+          task.done && "text-text-muted line-through"
+        )}
       />
       <OwnerSelect
         value={task.owner}

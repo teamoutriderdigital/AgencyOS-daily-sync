@@ -110,6 +110,7 @@ export interface Database {
           headline_date: string;
           text: string;
           owner: TeamMember | null;
+          done: boolean;
           sort_order: number;
           created_at: string;
           updated_at: string;
