@@ -24,7 +24,6 @@ import { indexSummaries, type ItemSummary } from "@/lib/summaries";
 import { IdsSection } from "./ids-section";
 import { ActionItemsSection } from "./action-items-section";
 import { RocksTrackerSection } from "./rocks-tracker-section";
-import { ClientStagesSection } from "./client-stages-section";
 import { RatingSection } from "./rating-section";
 import { CompletedSection } from "./completed-section";
 import { WeeklyHeadlinesSection } from "./weekly-headlines-section";
@@ -351,7 +350,6 @@ export function WeeklyBoard({ initialSnapshot }: Props) {
         weekStartISO={weekStartISO}
         weekEndISO={weekEndISO}
       />
-      <ClientStagesSection clients={clients} />
       <WeeklyHeadlinesSection
         headlines={initialSnapshot.dailyHeadlines}
         tasks={initialSnapshot.headlineTasks}
