@@ -45,7 +45,10 @@ export async function updateActionItem(id: number, input: Partial<ActionItemInpu
 
 export async function toggleActionItemDone(id: number, done: boolean) {
   const supabase = createClient();
-  const { error } = await supabase.from("action_items").update({ done }).eq("id", id);
+  const { error } = await supabase
+    .from("action_items")
+    .update({ done, completed_at: done ? new Date().toISOString() : null })
+    .eq("id", id);
   if (error) throw new Error(error.message);
   revalidateDaily();
 }
@@ -95,7 +98,15 @@ export async function createIdsItem(input: IdsItemInput) {
 
 export async function updateIdsItem(id: number, input: Partial<IdsItemInput>) {
   const supabase = createClient();
-  const { error } = await supabase.from("ids_items").update(input).eq("id", id);
+  const patch: Partial<IdsItemInput> & { completed_at?: string | null } = { ...input };
+  // Stamp when an issue closes (Solved or archived); clear when it reopens.
+  if (input.status !== undefined || input.archived !== undefined) {
+    const closing = input.status === "Solved" || input.archived === true;
+    const reopening = input.status !== undefined && input.status !== "Solved" && input.archived !== true;
+    if (closing) patch.completed_at = new Date().toISOString();
+    else if (reopening || input.archived === false) patch.completed_at = null;
+  }
+  const { error } = await supabase.from("ids_items").update(patch).eq("id", id);
   if (error) throw new Error(error.message);
   revalidateDaily();
 }
