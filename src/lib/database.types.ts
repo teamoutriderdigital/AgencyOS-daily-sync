@@ -8,6 +8,7 @@ export type AttendanceStatus = "Present" | "Out";
 export type RockType = "company" | "individual";
 export type RockStatus = "On track" | "Off track" | "Done";
 export type Department = "Admin" | "Growth" | "Internal";
+export type BacklogSource = "manual" | "fathom";
 export type ClientStage = "Onboarding" | "Active" | "At Risk" | "Delivered" | "Churned";
 
 export interface Database {
@@ -182,6 +183,7 @@ export interface Database {
           quarter: string;
           department: Department | null;
           progress_note: string | null;
+          completed_at: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -221,6 +223,37 @@ export interface Database {
           key: string;
         };
         Update: Partial<Database["public"]["Tables"]["rock_meeting_kv"]["Row"]>;
+        Relationships: [];
+      };
+      innovations: {
+        Row: {
+          id: number;
+          title: string;
+          url: string | null;
+          found_by: string | null;
+          note: string | null;
+          department: Department | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: Partial<Database["public"]["Tables"]["innovations"]["Row"]>;
+        Update: Partial<Database["public"]["Tables"]["innovations"]["Row"]>;
+        Relationships: [];
+      };
+      backlog_items: {
+        Row: {
+          id: number;
+          title: string;
+          detail: string | null;
+          department: Department | null;
+          source: BacklogSource;
+          source_ref: string | null;
+          reviewed: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: Partial<Database["public"]["Tables"]["backlog_items"]["Row"]>;
+        Update: Partial<Database["public"]["Tables"]["backlog_items"]["Row"]>;
         Relationships: [];
       };
     };
