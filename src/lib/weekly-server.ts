@@ -6,6 +6,7 @@ import type { MeetingRating } from "./daily";
 import { currentIsoWeek, isoWeekStart } from "./weekly";
 import type { Innovation } from "./innovations";
 import type { BacklogItem } from "./backlog";
+import type { ItemSummary } from "./summaries";
 
 export type WeeklySnapshot = {
   actionItems: ActionItem[];
@@ -17,6 +18,7 @@ export type WeeklySnapshot = {
   ratings: MeetingRating[];
   innovations: Innovation[];
   backlogItems: BacklogItem[];
+  summaries: ItemSummary[];
 };
 
 // The date a week's meeting rating is stored under: that week's Monday (UTC).
@@ -32,7 +34,8 @@ function emptySnapshot(): WeeklySnapshot {
     clients: [],
     ratings: [],
     innovations: [],
-    backlogItems: []
+    backlogItems: [],
+    summaries: []
   };
 }
 
@@ -47,7 +50,7 @@ export async function getWeeklySnapshot(): Promise<WeeklySnapshot> {
     const supabase = createClient();
     const cur = currentIsoWeek();
     const ratingDate = weekRatingDate(cur.year, cur.week);
-    const [actionResp, idsResp, rocksResp, clientsResp, ratingsResp, innovationsResp, backlogResp] = await Promise.all([
+    const [actionResp, idsResp, rocksResp, clientsResp, ratingsResp, innovationsResp, backlogResp, summariesResp] = await Promise.all([
       supabase
         .from("action_items")
         .select("*")
@@ -67,7 +70,12 @@ export async function getWeeklySnapshot(): Promise<WeeklySnapshot> {
         .order("name", { ascending: true }),
       supabase.from("meeting_ratings").select("*").eq("rating_date", ratingDate),
       supabase.from("innovations").select("*").order("created_at", { ascending: false }),
-      supabase.from("backlog_items").select("*").order("created_at", { ascending: false })
+      supabase.from("backlog_items").select("*").order("created_at", { ascending: false }),
+      supabase
+        .from("item_summaries")
+        .select("*")
+        .eq("week_number", cur.week)
+        .eq("year_number", cur.year)
     ]);
     if (actionResp.error) throw new Error(actionResp.error.message);
     if (idsResp.error) throw new Error(idsResp.error.message);
@@ -80,6 +88,7 @@ export async function getWeeklySnapshot(): Promise<WeeklySnapshot> {
     }
     if (innovationsResp.error) console.error("innovations unavailable (run migration 013?):", innovationsResp.error.message);
     if (backlogResp.error) console.error("backlog_items unavailable (run migration 014?):", backlogResp.error.message);
+    if (summariesResp.error) console.error("item_summaries unavailable (run migration 015?):", summariesResp.error.message);
     return {
       actionItems: actionResp.data ?? [],
       idsItems: idsResp.data ?? [],
@@ -87,7 +96,8 @@ export async function getWeeklySnapshot(): Promise<WeeklySnapshot> {
       clients: clientsResp.data ?? [],
       ratings: ratingsResp.error ? [] : ratingsResp.data ?? [],
       innovations: innovationsResp.error ? [] : innovationsResp.data ?? [],
-      backlogItems: backlogResp.error ? [] : backlogResp.data ?? []
+      backlogItems: backlogResp.error ? [] : backlogResp.data ?? [],
+      summaries: summariesResp.error ? [] : summariesResp.data ?? []
     };
   } catch (e) {
     console.error("getWeeklySnapshot failed — rendering empty board:", e);

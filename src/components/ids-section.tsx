@@ -14,6 +14,8 @@ import { DEPARTMENTS, getDepartmentClasses, groupByDepartment } from "@/lib/depa
 import { createIdsItem, deleteIdsItem, updateIdsItem, upvoteIdsItem } from "@/lib/l10-actions";
 import type { Department, IdsStatus, L10Priority, TeamMember } from "@/lib/database.types";
 import type { Rock } from "@/lib/rocks";
+import { summaryKey } from "@/lib/summaries";
+import type { ItemSummary } from "@/lib/summaries";
 import { SectionShell } from "./section-shell";
 import { CarryoverBadge } from "./carryover-badge";
 
@@ -24,7 +26,15 @@ function autoResize(el: HTMLTextAreaElement | null) {
   el.style.height = `${el.scrollHeight}px`;
 }
 
-export function IdsSection({ items, rocks }: { items: IdsItem[]; rocks: Rock[] }) {
+export function IdsSection({
+  items,
+  rocks,
+  summaries
+}: {
+  items: IdsItem[];
+  rocks: Rock[];
+  summaries: Map<string, ItemSummary>;
+}) {
   const [adding, setAdding] = useState(false);
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [groupByDept, setGroupByDept] = useState(false);
@@ -109,6 +119,7 @@ export function IdsSection({ items, rocks }: { items: IdsItem[]; rocks: Rock[] }
                     key={item.id}
                     item={item}
                     rocks={rocks}
+                    summaries={summaries}
                     expanded={expandedId === item.id}
                     onToggle={() => setExpandedId((cur) => (cur === item.id ? null : item.id))}
                   />
@@ -120,6 +131,7 @@ export function IdsSection({ items, rocks }: { items: IdsItem[]; rocks: Rock[] }
                 key={item.id}
                 item={item}
                 rocks={rocks}
+                summaries={summaries}
                 expanded={expandedId === item.id}
                 onToggle={() => setExpandedId((cur) => (cur === item.id ? null : item.id))}
               />
@@ -136,11 +148,13 @@ export function IdsSection({ items, rocks }: { items: IdsItem[]; rocks: Rock[] }
 function IdsRow({
   item,
   rocks,
+  summaries,
   expanded,
   onToggle
 }: {
   item: IdsItem;
   rocks: Rock[];
+  summaries: Map<string, ItemSummary>;
   expanded: boolean;
   onToggle: () => void;
 }) {
@@ -335,10 +349,18 @@ function IdsRow({
         </button>
       </div>
       {expanded && (
-        <div className="grid gap-3 border-t border-border/30 bg-surface-alt/20 px-5 py-3 lg:grid-cols-3">
-          <IdsLongField item={item} field="identify" label="Identify" />
-          <IdsLongField item={item} field="discuss" label="Discuss" />
-          <IdsLongField item={item} field="solve" label="Solve" />
+        <div className="border-t border-border/30 bg-surface-alt/20 px-5 py-3">
+          <div className="grid gap-3 lg:grid-cols-3">
+            <IdsLongField item={item} field="identify" label="Identify" />
+            <IdsLongField item={item} field="discuss" label="Discuss" />
+            <IdsLongField item={item} field="solve" label="Solve" />
+          </div>
+          {summaries.get(summaryKey("ids", item.id)) && (
+            <p className="mt-3 rounded bg-surface-alt/60 px-2 py-1 text-[11px] italic text-text-muted">
+              <span className="font-semibold not-italic">Last meeting: </span>
+              {summaries.get(summaryKey("ids", item.id))!.summary}
+            </p>
+          )}
         </div>
       )}
     </div>
