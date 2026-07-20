@@ -4,6 +4,8 @@ import type { Rock } from "./rocks";
 import type { Client } from "./clients";
 import type { MeetingRating } from "./daily";
 import { currentIsoWeek, isoWeekStart } from "./weekly";
+import type { Innovation } from "./innovations";
+import type { BacklogItem } from "./backlog";
 
 export type WeeklySnapshot = {
   actionItems: ActionItem[];
@@ -13,6 +15,8 @@ export type WeeklySnapshot = {
   // Meeting ratings for the current week (keyed by the week's Monday). The board
   // refetches this when you navigate to a different week.
   ratings: MeetingRating[];
+  innovations: Innovation[];
+  backlogItems: BacklogItem[];
 };
 
 // The date a week's meeting rating is stored under: that week's Monday (UTC).
@@ -21,7 +25,15 @@ export function weekRatingDate(year: number, week: number): string {
 }
 
 function emptySnapshot(): WeeklySnapshot {
-  return { actionItems: [], idsItems: [], rocks: [], clients: [], ratings: [] };
+  return {
+    actionItems: [],
+    idsItems: [],
+    rocks: [],
+    clients: [],
+    ratings: [],
+    innovations: [],
+    backlogItems: []
+  };
 }
 
 // The weekly L10 board loads the same open master lists as the daily board (the
@@ -35,7 +47,7 @@ export async function getWeeklySnapshot(): Promise<WeeklySnapshot> {
     const supabase = createClient();
     const cur = currentIsoWeek();
     const ratingDate = weekRatingDate(cur.year, cur.week);
-    const [actionResp, idsResp, rocksResp, clientsResp, ratingsResp] = await Promise.all([
+    const [actionResp, idsResp, rocksResp, clientsResp, ratingsResp, innovationsResp, backlogResp] = await Promise.all([
       supabase
         .from("action_items")
         .select("*")
@@ -53,7 +65,9 @@ export async function getWeeklySnapshot(): Promise<WeeklySnapshot> {
         .select("*")
         .order("sort_order", { ascending: true })
         .order("name", { ascending: true }),
-      supabase.from("meeting_ratings").select("*").eq("rating_date", ratingDate)
+      supabase.from("meeting_ratings").select("*").eq("rating_date", ratingDate),
+      supabase.from("innovations").select("*").order("created_at", { ascending: false }),
+      supabase.from("backlog_items").select("*").order("created_at", { ascending: false })
     ]);
     if (actionResp.error) throw new Error(actionResp.error.message);
     if (idsResp.error) throw new Error(idsResp.error.message);
@@ -64,12 +78,16 @@ export async function getWeeklySnapshot(): Promise<WeeklySnapshot> {
     if (ratingsResp.error) {
       console.error("meeting_ratings unavailable (run migration 009?):", ratingsResp.error.message);
     }
+    if (innovationsResp.error) console.error("innovations unavailable (run migration 013?):", innovationsResp.error.message);
+    if (backlogResp.error) console.error("backlog_items unavailable (run migration 014?):", backlogResp.error.message);
     return {
       actionItems: actionResp.data ?? [],
       idsItems: idsResp.data ?? [],
       rocks: rocksResp.data ?? [],
       clients: clientsResp.data ?? [],
-      ratings: ratingsResp.error ? [] : ratingsResp.data ?? []
+      ratings: ratingsResp.error ? [] : ratingsResp.data ?? [],
+      innovations: innovationsResp.error ? [] : innovationsResp.data ?? [],
+      backlogItems: backlogResp.error ? [] : backlogResp.data ?? []
     };
   } catch (e) {
     console.error("getWeeklySnapshot failed — rendering empty board:", e);
