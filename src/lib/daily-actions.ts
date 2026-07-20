@@ -6,6 +6,9 @@ import type { AttendanceStatus, TeamMember } from "./database.types";
 
 function revalidateDaily() {
   revalidatePath("/daily");
+  // Client headlines are also mirrored (and editable) on the weekly L10 board,
+  // so refresh it too when a daily edit lands.
+  revalidatePath("/weekly");
 }
 
 // ─── Attendance ──────────────────────────────────────────────────────────────

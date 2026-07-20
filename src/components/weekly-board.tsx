@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import type { ActionItem, IdsItem } from "@/lib/l10";
+import { todayLocalISO } from "@/lib/l10";
 import type { Rock } from "@/lib/rocks";
 import { QUARTER } from "@/lib/rocks";
 import type { Client } from "@/lib/clients";
@@ -26,7 +27,7 @@ import { ActionItemsSection } from "./action-items-section";
 import { RocksTrackerSection } from "./rocks-tracker-section";
 import { RatingSection } from "./rating-section";
 import { CompletedSection } from "./completed-section";
-import { WeeklyHeadlinesSection } from "./weekly-headlines-section";
+import { HeadlinesSection } from "./headlines-section";
 import { InnovationSection } from "./innovation-section";
 import { BacklogSection } from "./backlog-section";
 
@@ -269,6 +270,11 @@ export function WeeklyBoard({ initialSnapshot }: Props) {
   }, [supabase, selected]);
 
   const summaryIndex = useMemo(() => indexSummaries(summaries), [summaries]);
+  const clientNames = useMemo(() => clients.map((c) => c.name), [clients]);
+  const clientStages = useMemo(
+    () => Object.fromEntries(clients.map((c) => [c.name, c.stage])),
+    [clients]
+  );
 
   const weekActions = useMemo(
     () => actionItems.filter((i) => itemInWeek(i, selected, current)),
@@ -350,11 +356,13 @@ export function WeeklyBoard({ initialSnapshot }: Props) {
         weekStartISO={weekStartISO}
         weekEndISO={weekEndISO}
       />
-      <WeeklyHeadlinesSection
+      <HeadlinesSection
         headlines={initialSnapshot.dailyHeadlines}
         tasks={initialSnapshot.headlineTasks}
-        date={initialSnapshot.headlinesDate}
-        clients={clients}
+        date={initialSnapshot.headlinesDate ?? todayLocalISO()}
+        currentMember={null}
+        clients={clientNames}
+        clientStages={clientStages}
       />
       <IdsSection items={weekIds} rocks={rocks} summaries={summaryIndex} />
       <ActionItemsSection items={weekActions} />

@@ -12,7 +12,8 @@ import {
   updateHeadlineTask
 } from "@/lib/daily-actions";
 import type { DailyHeadline, HeadlineTask } from "@/lib/daily";
-import type { TeamMember } from "@/lib/database.types";
+import type { TeamMember, ClientStage } from "@/lib/database.types";
+import { clientStageClasses } from "@/lib/clients";
 import { OWNERS } from "@/lib/team";
 import { SectionShell } from "./section-shell";
 import { ClientChips } from "./client-chips";
@@ -26,13 +27,17 @@ export function HeadlinesSection({
   tasks,
   date,
   currentMember,
-  clients = []
+  clients = [],
+  clientStages = {}
 }: {
   headlines: DailyHeadline[];
   tasks: HeadlineTask[];
   date: string;
   currentMember: TeamMember | null;
   clients?: string[];
+  // Optional client → stage map. When provided (weekly board), each headline
+  // shows its client's stage badge. The daily board omits it.
+  clientStages?: Record<string, ClientStage>;
 }) {
   const tasksByHeadline = useMemo(() => {
     const map = new Map<number, HeadlineTask[]>();
@@ -59,6 +64,7 @@ export function HeadlinesSection({
             headline={h}
             tasks={tasksByHeadline.get(h.id) ?? []}
             clients={clients}
+            stage={h.client ? clientStages[h.client] : undefined}
           />
         ))}
       </div>
@@ -258,11 +264,13 @@ function AddTaskInline({ headline }: { headline: DailyHeadline }) {
 function HeadlineRow({
   headline,
   tasks,
-  clients
+  clients,
+  stage
 }: {
   headline: DailyHeadline;
   tasks: HeadlineTask[];
   clients: string[];
+  stage?: ClientStage;
 }) {
   const [editing, setEditing] = useState(false);
   const [client, setClient] = useState<string | null>(headline.client);
@@ -329,6 +337,11 @@ function HeadlineRow({
           </span>
         ) : (
           <span className="mt-0.5 w-24 flex-shrink-0 text-xs italic text-text-muted">—</span>
+        )}
+        {stage && (
+          <span className={cn("mt-0.5 flex-shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-semibold", clientStageClasses(stage))}>
+            {stage}
+          </span>
         )}
         <HeadlineSummary text={headline.text} />
         <OwnerSelect
