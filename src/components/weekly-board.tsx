@@ -18,11 +18,16 @@ import {
   type IsoWeek
 } from "@/lib/weekly";
 import { triggerWeeklySync } from "@/lib/l10-actions";
+import type { Innovation } from "@/lib/innovations";
+import type { BacklogItem } from "@/lib/backlog";
 import { IdsSection } from "./ids-section";
 import { ActionItemsSection } from "./action-items-section";
 import { RocksTrackerSection } from "./rocks-tracker-section";
 import { ClientStagesSection } from "./client-stages-section";
 import { RatingSection } from "./rating-section";
+import { CompletedSection } from "./completed-section";
+import { InnovationSection } from "./innovation-section";
+import { BacklogSection } from "./backlog-section";
 
 type Props = { initialSnapshot: WeeklySnapshot };
 
@@ -39,6 +44,8 @@ export function WeeklyBoard({ initialSnapshot }: Props) {
   const [rocks, setRocks] = useState<Rock[]>(initialSnapshot.rocks);
   const [clients, setClients] = useState<Client[]>(initialSnapshot.clients);
   const [ratings, setRatings] = useState<MeetingRating[]>(initialSnapshot.ratings);
+  const [innovations, setInnovations] = useState<Innovation[]>(initialSnapshot.innovations);
+  const [backlogItems, setBacklogItems] = useState<BacklogItem[]>(initialSnapshot.backlogItems);
   const [syncing, startSync] = useTransition();
 
   // A week's meeting rating is stored under that week's Monday (UTC).
@@ -46,6 +53,18 @@ export function WeeklyBoard({ initialSnapshot }: Props) {
     () => isoWeekStart(selected.year, selected.week).toISOString().slice(0, 10),
     [selected]
   );
+
+  // Bounds for the Completed section, which filters rocks/IDS/to-dos by
+  // completed_at falling within the selected ISO week.
+  const weekStartISO = useMemo(
+    () => isoWeekStart(selected.year, selected.week).toISOString().slice(0, 10),
+    [selected]
+  );
+  const weekEndISO = useMemo(() => {
+    const d = isoWeekStart(selected.year, selected.week);
+    d.setUTCDate(d.getUTCDate() + 7);
+    return d.toISOString().slice(0, 10);
+  }, [selected]);
 
   // ─── Live master tables (to-dos + IDS + rocks) ────────────────────────────
   useEffect(() => {
@@ -122,11 +141,51 @@ export function WeeklyBoard({ initialSnapshot }: Props) {
       })
       .subscribe();
 
+    const innovationsChannel = supabase
+      .channel("weekly:innovations")
+      .on("postgres_changes", { event: "*", schema: "public", table: "innovations" }, (payload) => {
+        if (payload.eventType === "DELETE") {
+          const oldId = (payload.old as { id: number }).id;
+          setInnovations((prev) => prev.filter((i) => i.id !== oldId));
+          return;
+        }
+        const row = payload.new as Innovation;
+        setInnovations((prev) => {
+          const idx = prev.findIndex((i) => i.id === row.id);
+          if (idx === -1) return [...prev, row];
+          const copy = [...prev];
+          copy[idx] = row;
+          return copy;
+        });
+      })
+      .subscribe();
+
+    const backlogChannel = supabase
+      .channel("weekly:backlog_items")
+      .on("postgres_changes", { event: "*", schema: "public", table: "backlog_items" }, (payload) => {
+        if (payload.eventType === "DELETE") {
+          const oldId = (payload.old as { id: number }).id;
+          setBacklogItems((prev) => prev.filter((b) => b.id !== oldId));
+          return;
+        }
+        const row = payload.new as BacklogItem;
+        setBacklogItems((prev) => {
+          const idx = prev.findIndex((b) => b.id === row.id);
+          if (idx === -1) return [...prev, row];
+          const copy = [...prev];
+          copy[idx] = row;
+          return copy;
+        });
+      })
+      .subscribe();
+
     return () => {
       supabase.removeChannel(actionChannel);
       supabase.removeChannel(idsChannel);
       supabase.removeChannel(rocksChannel);
       supabase.removeChannel(clientsChannel);
+      supabase.removeChannel(innovationsChannel);
+      supabase.removeChannel(backlogChannel);
     };
   }, [supabase]);
 
@@ -242,9 +301,18 @@ export function WeeklyBoard({ initialSnapshot }: Props) {
       )}
 
       <RocksTrackerSection rocks={rocks} quarter={QUARTER} />
+      <CompletedSection
+        rocks={rocks}
+        idsItems={idsItems}
+        actionItems={actionItems}
+        weekStartISO={weekStartISO}
+        weekEndISO={weekEndISO}
+      />
       <ClientStagesSection clients={clients} />
       <IdsSection items={weekIds} rocks={rocks} />
       <ActionItemsSection items={weekActions} />
+      <InnovationSection items={innovations} />
+      <BacklogSection items={backlogItems} />
       <RatingSection ratings={ratings} date={ratingDate} />
     </div>
   );

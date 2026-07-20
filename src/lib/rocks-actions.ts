@@ -60,7 +60,10 @@ export async function deleteRock(id: number) {
 // Weekly tracker: flip a rock's On track / Off track / Done status.
 export async function setRockStatus(id: number, status: RockStatus) {
   const supabase = createClient();
-  const { error } = await supabase.from("rocks").update({ status }).eq("id", id);
+  const { error } = await supabase
+    .from("rocks")
+    .update({ status, completed_at: status === "Done" ? new Date().toISOString() : null })
+    .eq("id", id);
   if (error) throw new Error(error.message);
   revalidateRocks();
 }
