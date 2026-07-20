@@ -1,4 +1,4 @@
-import type { RockType, Tables } from "./database.types";
+import type { Department, RockStatus, RockType, Tables } from "./database.types";
 
 export type Rock = Tables<"rocks">;
 export type RockKv = Tables<"rock_meeting_kv">;
@@ -352,28 +352,42 @@ export const FACILITATOR_KEY = "facilitator";
 // The "Insert draft rocks" button loads these from the brain-dump so the team
 // refines rather than types from scratch.
 
-export type RockSeed = { title: string; owner: string; rock_type: RockType; smart: string };
+export type RockSeed = {
+  title: string;
+  owner: string;
+  rock_type: RockType;
+  department: Department;
+  progress_note: string;
+  status?: RockStatus;
+  smart: string;
+};
 
 export const SEED_ROCKS: RockSeed[] = [
-  { title: "Onboarding engine", owner: "Daniel", rock_type: "individual", smart: "Form → auto-generated tasks live for both pre-sale and post-sale, run end-to-end without manual setup." },
-  { title: "Internal wiki / SOP library", owner: "Daniel", rock_type: "company", smart: "Searchable knowledge library stood up; every core SOP has a home and an owner." },
-  { title: "Accountability map + info flow", owner: "Daniel", rock_type: "company", smart: "Single-owner map published: who sends what, where, how — no orphaned handoffs." },
-  { title: "Plane cleanup", owner: "Daniel", rock_type: "company", smart: "Anyone opens Plane and knows their day at a glance; no stale/ownerless items." },
-  { title: "Internal dashboard (agency OS)", owner: "Kas", rock_type: "company", smart: "PRD shipped and the internal OS scoped; first working surface demoable." },
-  { title: "Client dashboard + CX", owner: "Kas", rock_type: "company", smart: "Client journey mapped end-to-end with a client-facing dashboard surface." },
-  { title: "Audit system", owner: "Kas", rock_type: "company", smart: "Jack can run 90% of the audit and generate strategy, report, and proposal rough draft." },
-  { title: "Data governance / infra", owner: "Leo", rock_type: "company", smart: "Data model + governance in place first — the foundation everything else builds on." },
-  { title: "Client workflows flowcharted", owner: "Leo", rock_type: "company", smart: "Every client workflow charted beginning to end and validated with owners." },
-  { title: "Audit backend + Plane logic", owner: "Leo", rock_type: "company", smart: "Audit backend built with Plane conditional logic driving Kas's audit product." },
-  { title: "Obsidian vault on VPS", owner: "Leo", rock_type: "company", smart: "Vault architecture live on the VPS as the context source of truth." },
-  { title: "Site workflow (0 → live)", owner: "Mostafa", rock_type: "company", smart: "20–30 workflows take a site zero → published, incl. UX-research + nudge/conversion step." },
-  { title: "Internal sites built", owner: "Mostafa", rock_type: "company", smart: "Agency OS, business OS, castans.com and Jack's site built as the test of the workflow." },
-  { title: "SEO step + internal ranking", owner: "Darko", rock_type: "individual", smart: "SEO step defined inside the site workflow; internal sites ranking, reusing castans.com authority." },
-  { title: "Compliance playbooks", owner: "Darko", rock_type: "individual", smart: "Reusable compliance playbooks documented and handed to the workflow." },
-  { title: "Sales — agency OS clients", owner: "Jack", rock_type: "individual", smart: "Pipeline for five-figure agency-OS clients live with first qualified opportunities." },
-  { title: "Finance + contracts", owner: "Jack", rock_type: "individual", smart: "Finance + contract process standardized and running." },
-  { title: "Legal / compliance", owner: "Jack", rock_type: "company", smart: "Liability, state compliance and contract updates reviewed and current." },
-  { title: "Ops-infra security audit", owner: "Rehan", rock_type: "company", smart: "Cyber / ops-infra hardened to best practice by day 90; GitHub separated, VPS + G Suite done." }
+  // ── Admin ──
+  { title: "Email templates", owner: "Daniel", rock_type: "company", department: "Admin", progress_note: "1/7", smart: "Reusable email template set built and in use across client + internal comms." },
+  { title: "Meeting flows / templates", owner: "Daniel", rock_type: "company", department: "Admin", progress_note: "2/9", smart: "Meeting flows and templates documented and run from a single source." },
+  { title: "Onboarding end-to-end + team wiki", owner: "Daniel", rock_type: "company", department: "Admin", progress_note: "0/8", smart: "Onboarding runs end-to-end; the team wiki holds every core SOP." },
+  { title: "Single-owner accountability map for ops", owner: "Daniel", rock_type: "company", department: "Admin", progress_note: "3/6", smart: "Every ops responsibility has one named owner on a published map." },
+  { title: "Legal / compliance / contracts", owner: "Jack", rock_type: "company", department: "Admin", progress_note: "0/6", smart: "Liability, compliance, and contract templates reviewed and current." },
+  // ── Growth ──
+  { title: "Lead Gen — AgencyOS (high-ticket)", owner: "Jack", rock_type: "individual", department: "Growth", progress_note: "1/5", smart: "Pipeline for five-figure agency-OS clients live with first qualified opportunities." },
+  { title: "Lead Gen — Heavy Duty Leads", owner: "Jack", rock_type: "individual", department: "Growth", progress_note: "0/6", smart: "Heavy Duty Leads channel producing qualified leads on a repeatable motion." },
+  { title: "Verticalization playbook", owner: "Jack", rock_type: "company", department: "Growth", progress_note: "0/4", smart: "A documented playbook for taking the offer into a named vertical." },
+  { title: "Customer-experience journey", owner: "Jack", rock_type: "company", department: "Growth", progress_note: "1/5", smart: "Client journey mapped end-to-end with owners at each stage." },
+  { title: "Add Google Ads business with Daniel UK", owner: "Jack", rock_type: "individual", department: "Growth", progress_note: "0/1", smart: "Google Ads UK entity go/no-go decided and, if go, stood up with Daniel." },
+  // ── Internal ──
+  { title: "Plane / PM — self-host on Ares + AgencyOS integration", owner: "Daniel", rock_type: "company", department: "Internal", progress_note: "1/9", smart: "Plane self-hosted on Ares and integrated into AgencyOS." },
+  { title: "Data Architecture Map", owner: "Leo", rock_type: "company", department: "Internal", progress_note: "0/4", smart: "The data architecture charted end-to-end and validated." },
+  { title: "Data is #1 — per-client BigQuery + Plane + Obsidian", owner: "Leo", rock_type: "company", department: "Internal", progress_note: "0/5", smart: "Per-client data lands in BigQuery, wired to Plane and Obsidian." },
+  { title: "Workflows + SOPs + audit build + client data", owner: "Leo", rock_type: "company", department: "Internal", progress_note: "0/5", smart: "Client workflows, SOPs, and audit backend built on the client data model." },
+  { title: "Build 4-5 internal sites (with Mostafa)", owner: "Leo", rock_type: "company", department: "Internal", progress_note: "0/1", smart: "Four to five internal sites built with Mostafa as the workflow test." },
+  { title: "UX / user-journey skill in Claude (with Mostafa)", owner: "Leo", rock_type: "company", department: "Internal", progress_note: "0/1", smart: "A reusable UX / user-journey skill in Claude, built with Mostafa." },
+  { title: "Security / access (repos, Vercel, VPS doc hosting)", owner: "Rehan", rock_type: "company", department: "Internal", progress_note: "0/32", smart: "Repos, Vercel, and VPS doc hosting access hardened to best practice." },
+  { title: "Code review workflows", owner: "Rehan", rock_type: "company", department: "Internal", progress_note: "0/17", smart: "Code review workflows defined and adopted across the team." },
+  { title: "G-Suite multi-domain", owner: "Rehan", rock_type: "company", department: "Internal", progress_note: "1/1", status: "Done", smart: "G-Suite set up across both domains." },
+  { title: "Internal Dashboard / AgencyOS", owner: "Kas", rock_type: "company", department: "Internal", progress_note: "0/11", smart: "The internal agency-OS dashboard scoped and first surface demoable." },
+  { title: "Client Dashboard", owner: "Kas", rock_type: "company", department: "Internal", progress_note: "0/7", smart: "A client-facing dashboard surface built on the client journey." },
+  { title: "Audit / Offer / Proposal full system", owner: "Kas", rock_type: "company", department: "Internal", progress_note: "0/5", smart: "Jack can run 90% of the audit → strategy, report, and proposal draft." }
 ];
 
 // Master-dashboard export line, matching the meeting doc's rock format.
