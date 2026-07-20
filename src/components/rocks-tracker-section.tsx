@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import { ROCK_OWNERS, type Rock } from "@/lib/rocks";
 import { setRockStatus } from "@/lib/rocks-actions";
 import type { RockStatus } from "@/lib/database.types";
+import { getDepartmentClasses, groupByDepartment } from "@/lib/department";
 import { SectionShell } from "./section-shell";
 
 const ROCK_STATUSES: RockStatus[] = ["On track", "Off track", "Done"];
@@ -20,32 +21,49 @@ function statusClasses(status: RockStatus): string {
   }
 }
 
+function pctBadgeClasses(pct: number): string {
+  return pct === 100
+    ? "border-green-200 bg-green-50 text-green-700"
+    : pct >= 60
+      ? "border-yellow-200 bg-yellow-50 text-yellow-700"
+      : "border-red-200 bg-red-50 text-red-700";
+}
+
+// "On track" counts anything not Off track (Done rocks are wins, not risks).
+function onTrackPctFor(rocks: Rock[]): number {
+  if (rocks.length === 0) return 0;
+  const good = rocks.filter((r) => r.status !== "Off track").length;
+  return Math.round((good / rocks.length) * 100);
+}
+
+// Group by owner, keeping the known roster order first, then any extras.
+function groupByOwner(rocks: Rock[]): { owner: string; rocks: Rock[] }[] {
+  const byOwner = new Map<string, Rock[]>();
+  for (const r of rocks) {
+    const key = r.owner?.trim() || "Unassigned";
+    const list = byOwner.get(key) ?? [];
+    list.push(r);
+    byOwner.set(key, list);
+  }
+  const ordered: string[] = [];
+  for (const name of ROCK_OWNERS) if (byOwner.has(name)) ordered.push(name);
+  for (const name of byOwner.keys()) if (!ordered.includes(name)) ordered.push(name);
+  return ordered.map((owner) => ({ owner, rocks: byOwner.get(owner) ?? [] }));
+}
+
 // Weekly rock review: the finalized rocks grouped by owner, each with a status
 // toggle (On track / Off track / Done). Shows the team's on-track percentage —
 // "on track" counts anything not Off track (Done rocks are wins, not risks).
 export function RocksTrackerSection({ rocks, quarter }: { rocks: Rock[]; quarter: string }) {
   const forQuarter = useMemo(() => rocks.filter((r) => r.quarter === quarter), [rocks, quarter]);
 
-  const onTrackPct = useMemo(() => {
-    if (forQuarter.length === 0) return 0;
-    const good = forQuarter.filter((r) => r.status !== "Off track").length;
-    return Math.round((good / forQuarter.length) * 100);
-  }, [forQuarter]);
+  const onTrackPct = useMemo(() => onTrackPctFor(forQuarter), [forQuarter]);
 
-  // Group by owner, keeping the known roster order first, then any extras.
-  const groups = useMemo(() => {
-    const byOwner = new Map<string, Rock[]>();
-    for (const r of forQuarter) {
-      const key = r.owner?.trim() || "Unassigned";
-      const list = byOwner.get(key) ?? [];
-      list.push(r);
-      byOwner.set(key, list);
-    }
-    const ordered: string[] = [];
-    for (const name of ROCK_OWNERS) if (byOwner.has(name)) ordered.push(name);
-    for (const name of byOwner.keys()) if (!ordered.includes(name)) ordered.push(name);
-    return ordered.map((owner) => ({ owner, rocks: byOwner.get(owner) ?? [] }));
-  }, [forQuarter]);
+  // Department first (Admin → Growth → Internal → Unassigned), owner within.
+  const departmentGroups = useMemo(
+    () => groupByDepartment(forQuarter, (r) => r.department),
+    [forQuarter]
+  );
 
   return (
     <SectionShell
@@ -53,16 +71,7 @@ export function RocksTrackerSection({ rocks, quarter }: { rocks: Rock[]; quarter
       count={forQuarter.length}
       countLabel={`for ${quarter}`}
       rightSlot={
-        <span
-          className={cn(
-            "rounded-full border px-2.5 py-0.5 text-xs font-semibold",
-            onTrackPct === 100
-              ? "border-green-200 bg-green-50 text-green-700"
-              : onTrackPct >= 60
-                ? "border-yellow-200 bg-yellow-50 text-yellow-700"
-                : "border-red-200 bg-red-50 text-red-700"
-          )}
-        >
+        <span className={cn("rounded-full border px-2.5 py-0.5 text-xs font-semibold", pctBadgeClasses(onTrackPct))}>
           {onTrackPct}% On Track
         </span>
       }
@@ -72,19 +81,43 @@ export function RocksTrackerSection({ rocks, quarter }: { rocks: Rock[]; quarter
           No rocks for {quarter} yet. Set them in the Finalize &amp; Assign board.
         </p>
       ) : (
-        <div className="space-y-4 px-5 py-4">
-          {groups.map((g) => (
-            <div key={g.owner}>
-              <p className="mb-2 text-sm font-semibold text-text">
-                {g.owner} <span className="text-xs font-normal text-text-muted">({g.rocks.length})</span>
-              </p>
-              <div className="grid gap-2 sm:grid-cols-2">
-                {g.rocks.map((rock) => (
-                  <RockCard key={rock.id} rock={rock} />
-                ))}
+        <div className="space-y-5 px-5 py-4">
+          {departmentGroups.map((dept) => {
+            const deptPct = onTrackPctFor(dept.items);
+            const ownerGroups = groupByOwner(dept.items);
+            return (
+              <div key={dept.department}>
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <span
+                    className={cn(
+                      "rounded-full border px-2 py-0.5 text-xs font-semibold",
+                      getDepartmentClasses(dept.department === "Unassigned" ? null : dept.department)
+                    )}
+                  >
+                    {dept.department}{" "}
+                    <span className="font-normal">({dept.items.length})</span>
+                  </span>
+                  <span className={cn("rounded-full border px-2 py-0.5 text-[11px] font-semibold", pctBadgeClasses(deptPct))}>
+                    {deptPct}% On Track
+                  </span>
+                </div>
+                <div className="space-y-4">
+                  {ownerGroups.map((g) => (
+                    <div key={g.owner}>
+                      <p className="mb-2 text-sm font-semibold text-text">
+                        {g.owner} <span className="text-xs font-normal text-text-muted">({g.rocks.length})</span>
+                      </p>
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        {g.rocks.map((rock) => (
+                          <RockCard key={rock.id} rock={rock} />
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </SectionShell>
@@ -100,7 +133,14 @@ function RockCard({ rock }: { rock: Rock }) {
           <p className="truncate text-sm font-medium text-text" title={rock.title}>
             {rock.title || "(untitled rock)"}
           </p>
-          <p className="text-[11px] uppercase tracking-wide text-text-muted">{rock.rock_type}</p>
+          <p className="text-[11px] uppercase tracking-wide text-text-muted">
+            {rock.rock_type}
+            {rock.progress_note && (
+              <span className="ml-2 rounded-full border border-border bg-surface px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-text-muted">
+                {rock.progress_note}
+              </span>
+            )}
+          </p>
         </div>
         <select
           value={rock.status}
