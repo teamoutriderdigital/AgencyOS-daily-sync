@@ -4,13 +4,14 @@ import { useMemo, useState, useTransition } from "react";
 import { cn } from "@/lib/utils";
 import { L10_PRIORITIES, getPriorityClasses, type ActionItem } from "@/lib/l10";
 import { OWNERS } from "@/lib/team";
+import { DEPARTMENTS, getDepartmentClasses, groupByDepartment } from "@/lib/department";
 import {
   createActionItem,
   deleteActionItem,
   toggleActionItemDone,
   updateActionItem
 } from "@/lib/l10-actions";
-import type { L10Priority, TeamMember } from "@/lib/database.types";
+import type { Department, L10Priority, TeamMember } from "@/lib/database.types";
 import { SectionShell } from "./section-shell";
 import { CarryoverBadge } from "./carryover-badge";
 
@@ -20,6 +21,7 @@ export function ActionItemsSection({ items }: { items: ActionItem[] }) {
   const [showDone, setShowDone] = useState(false);
   const [sortBy, setSortBy] = useState<Sort>("due");
   const [adding, setAdding] = useState(false);
+  const [groupByDept, setGroupByDept] = useState(false);
 
   const visible = useMemo(() => {
     const filtered = showDone ? items : items.filter((i) => !i.done);
@@ -38,6 +40,8 @@ export function ActionItemsSection({ items }: { items: ActionItem[] }) {
     return sorted;
   }, [items, showDone, sortBy]);
 
+  const grouped = useMemo(() => groupByDepartment(visible, (i) => i.department), [visible]);
+
   return (
     <SectionShell
       title="To-dos"
@@ -48,6 +52,14 @@ export function ActionItemsSection({ items }: { items: ActionItem[] }) {
           <label className="flex items-center gap-1 text-xs text-text-muted">
             <input type="checkbox" checked={showDone} onChange={(e) => setShowDone(e.target.checked)} />
             Show done
+          </label>
+          <label className="flex items-center gap-1 text-xs text-text-muted">
+            <input
+              type="checkbox"
+              checked={groupByDept}
+              onChange={(e) => setGroupByDept(e.target.checked)}
+            />
+            Group by department
           </label>
           <select
             value={sortBy}
@@ -74,9 +86,23 @@ export function ActionItemsSection({ items }: { items: ActionItem[] }) {
             No to-dos. Nice and clear.
           </p>
         )}
-        {visible.map((item) => (
-          <ActionRow key={item.id} item={item} />
-        ))}
+        {groupByDept
+          ? grouped.map((g) => (
+              <div key={g.department}>
+                <div
+                  className={cn(
+                    "border-b border-border/50 px-5 py-1.5 text-xs font-semibold",
+                    getDepartmentClasses(g.department === "Unassigned" ? null : g.department)
+                  )}
+                >
+                  {g.department}
+                </div>
+                {g.items.map((item) => (
+                  <ActionRow key={item.id} item={item} />
+                ))}
+              </div>
+            ))
+          : visible.map((item) => <ActionRow key={item.id} item={item} />)}
         {adding && <NewActionRow onCancel={() => setAdding(false)} onSaved={() => setAdding(false)} />}
       </div>
     </SectionShell>
@@ -166,6 +192,26 @@ function ActionRow({ item }: { item: ActionItem }) {
           </option>
         ))}
       </select>
+      <select
+        value={item.department ?? ""}
+        onChange={(e) =>
+          startTransition(() =>
+            updateActionItem(item.id, { department: (e.target.value as Department) || null })
+          )
+        }
+        className={cn(
+          "cursor-pointer rounded-full border px-2 py-0.5 text-xs font-semibold",
+          getDepartmentClasses(item.department)
+        )}
+        title="Department"
+      >
+        <option value="">—</option>
+        {DEPARTMENTS.map((d) => (
+          <option key={d} value={d}>
+            {d}
+          </option>
+        ))}
+      </select>
       <button
         type="button"
         onClick={() => {
@@ -186,6 +232,7 @@ function NewActionRow({ onCancel, onSaved }: { onCancel: () => void; onSaved: ()
   const [assignee, setAssignee] = useState<TeamMember | "">("");
   const [dueDate, setDueDate] = useState("");
   const [priority, setPriority] = useState<L10Priority | "">("");
+  const [department, setDepartment] = useState<Department | "">("");
   const [pending, startTransition] = useTransition();
 
   const save = () => {
@@ -196,7 +243,8 @@ function NewActionRow({ onCancel, onSaved }: { onCancel: () => void; onSaved: ()
         item: v,
         assignee: assignee || null,
         due_date: dueDate || null,
-        priority: priority || null
+        priority: priority || null,
+        department: department || null
       });
       onSaved();
     });
@@ -247,6 +295,19 @@ function NewActionRow({ onCancel, onSaved }: { onCancel: () => void; onSaved: ()
         {L10_PRIORITIES.map((p) => (
           <option key={p} value={p}>
             {p}
+          </option>
+        ))}
+      </select>
+      <select
+        value={department}
+        onChange={(e) => setDepartment(e.target.value as Department | "")}
+        className="rounded-md border border-border bg-surface px-2 py-1 text-xs text-text"
+        title="Department"
+      >
+        <option value="">— dept —</option>
+        {DEPARTMENTS.map((d) => (
+          <option key={d} value={d}>
+            {d}
           </option>
         ))}
       </select>

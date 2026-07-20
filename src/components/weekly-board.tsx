@@ -243,7 +243,7 @@ export function WeeklyBoard({ initialSnapshot }: Props) {
 
       <RocksTrackerSection rocks={rocks} quarter={QUARTER} />
       <ClientStagesSection clients={clients} />
-      <IdsSection items={weekIds} />
+      <IdsSection items={weekIds} rocks={rocks} />
       <ActionItemsSection items={weekActions} />
       <RatingSection ratings={ratings} date={ratingDate} />
     </div>

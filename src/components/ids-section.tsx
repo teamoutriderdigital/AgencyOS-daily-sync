@@ -10,8 +10,10 @@ import {
   type IdsItem
 } from "@/lib/l10";
 import { OWNERS } from "@/lib/team";
+import { DEPARTMENTS, getDepartmentClasses, groupByDepartment } from "@/lib/department";
 import { createIdsItem, deleteIdsItem, updateIdsItem, upvoteIdsItem } from "@/lib/l10-actions";
-import type { IdsStatus, L10Priority, TeamMember } from "@/lib/database.types";
+import type { Department, IdsStatus, L10Priority, TeamMember } from "@/lib/database.types";
+import type { Rock } from "@/lib/rocks";
 import { SectionShell } from "./section-shell";
 import { CarryoverBadge } from "./carryover-badge";
 
@@ -22,9 +24,10 @@ function autoResize(el: HTMLTextAreaElement | null) {
   el.style.height = `${el.scrollHeight}px`;
 }
 
-export function IdsSection({ items }: { items: IdsItem[] }) {
+export function IdsSection({ items, rocks }: { items: IdsItem[]; rocks: Rock[] }) {
   const [adding, setAdding] = useState(false);
   const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [groupByDept, setGroupByDept] = useState(false);
 
   const sorted = useMemo(() => {
     const priorityRank: Record<string, number> = { High: 0, Medium: 1 };
@@ -43,30 +46,43 @@ export function IdsSection({ items }: { items: IdsItem[] }) {
     });
   }, [items]);
 
+  const grouped = useMemo(() => groupByDepartment(sorted, (i) => i.department), [sorted]);
+
   return (
     <SectionShell
       title="IDS"
       count={sorted.length}
       countLabel="issues"
       rightSlot={
-        <button
-          type="button"
-          onClick={() => setAdding(true)}
-          className="rounded-md bg-accent px-3 py-1 text-xs font-medium text-text-inverse hover:bg-accent-strong"
-        >
-          + Add
-        </button>
+        <div className="flex items-center gap-2">
+          <label className="flex items-center gap-1 text-xs text-text-muted">
+            <input
+              type="checkbox"
+              checked={groupByDept}
+              onChange={(e) => setGroupByDept(e.target.checked)}
+            />
+            Group by department
+          </label>
+          <button
+            type="button"
+            onClick={() => setAdding(true)}
+            className="rounded-md bg-accent px-3 py-1 text-xs font-medium text-text-inverse hover:bg-accent-strong"
+          >
+            + Add
+          </button>
+        </div>
       }
     >
       <div className="overflow-x-auto">
-      <div className="min-w-[1040px] divide-y divide-border/50">
-        <div className="grid grid-cols-[auto_auto_minmax(0,2.5fr)_auto_auto_auto_minmax(0,1fr)_auto_auto_auto] items-center gap-2 border-b border-border bg-surface-alt/40 px-5 py-2 text-left text-xs uppercase tracking-wide text-text-muted">
+      <div className="min-w-[1140px] divide-y divide-border/50">
+        <div className="grid grid-cols-[auto_auto_minmax(0,2.5fr)_auto_auto_auto_auto_minmax(0,1fr)_auto_auto_auto] items-center gap-2 border-b border-border bg-surface-alt/40 px-5 py-2 text-left text-xs uppercase tracking-wide text-text-muted">
           <span></span>
           <span className="font-medium">Votes</span>
           <span className="font-medium">Issue</span>
           <span className="font-medium">Owner</span>
           <span className="font-medium">Status</span>
           <span className="font-medium">Priority</span>
+          <span className="font-medium">Department</span>
           <span className="font-medium">Client/Internal</span>
           <span className="font-medium">Due date</span>
           <span></span>
@@ -77,15 +93,40 @@ export function IdsSection({ items }: { items: IdsItem[] }) {
             No open issues. Nothing to identify, discuss, or solve right now.
           </p>
         )}
-        {sorted.map((item) => (
-          <IdsRow
-            key={item.id}
-            item={item}
-            expanded={expandedId === item.id}
-            onToggle={() => setExpandedId((cur) => (cur === item.id ? null : item.id))}
-          />
-        ))}
-        {adding && <NewIdsRow onCancel={() => setAdding(false)} onSaved={() => setAdding(false)} />}
+        {groupByDept
+          ? grouped.map((g) => (
+              <div key={g.department}>
+                <div
+                  className={cn(
+                    "border-b border-border/50 px-5 py-1.5 text-xs font-semibold",
+                    getDepartmentClasses(g.department === "Unassigned" ? null : g.department)
+                  )}
+                >
+                  {g.department}
+                </div>
+                {g.items.map((item) => (
+                  <IdsRow
+                    key={item.id}
+                    item={item}
+                    rocks={rocks}
+                    expanded={expandedId === item.id}
+                    onToggle={() => setExpandedId((cur) => (cur === item.id ? null : item.id))}
+                  />
+                ))}
+              </div>
+            ))
+          : sorted.map((item) => (
+              <IdsRow
+                key={item.id}
+                item={item}
+                rocks={rocks}
+                expanded={expandedId === item.id}
+                onToggle={() => setExpandedId((cur) => (cur === item.id ? null : item.id))}
+              />
+            ))}
+        {adding && (
+          <NewIdsRow rocks={rocks} onCancel={() => setAdding(false)} onSaved={() => setAdding(false)} />
+        )}
       </div>
       </div>
     </SectionShell>
@@ -94,17 +135,20 @@ export function IdsSection({ items }: { items: IdsItem[] }) {
 
 function IdsRow({
   item,
+  rocks,
   expanded,
   onToggle
 }: {
   item: IdsItem;
+  rocks: Rock[];
   expanded: boolean;
   onToggle: () => void;
 }) {
   const [, startTransition] = useTransition();
+  const linkedRock = item.rock_id != null ? rocks.find((r) => r.id === item.rock_id) : undefined;
   return (
     <div>
-      <div className="grid grid-cols-[auto_auto_minmax(0,2.5fr)_auto_auto_auto_minmax(0,1fr)_auto_auto_auto] items-center gap-2 px-5 py-2.5">
+      <div className="grid grid-cols-[auto_auto_minmax(0,2.5fr)_auto_auto_auto_auto_minmax(0,1fr)_auto_auto_auto] items-center gap-2 px-5 py-2.5">
         <button
           type="button"
           onClick={onToggle}
@@ -139,6 +183,28 @@ function IdsRow({
               <CarryoverBadge fromWeek={item.carried_from_week} />
             </span>
           )}
+          {linkedRock && (
+            <span className="mx-2 w-fit rounded-full border border-border bg-surface-alt px-2 py-0.5 text-[10px] font-medium text-text-muted">
+              🪨 {linkedRock.title}
+            </span>
+          )}
+          <select
+            value={item.rock_id ?? ""}
+            onChange={(e) =>
+              startTransition(() =>
+                updateIdsItem(item.id, { rock_id: e.target.value ? Number(e.target.value) : null })
+              )
+            }
+            className="mx-2 w-fit rounded-md border border-border bg-surface px-2 py-0.5 text-[10px] text-text-muted"
+            title="Linked rock"
+          >
+            <option value="">— rock —</option>
+            {rocks.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.title}
+              </option>
+            ))}
+          </select>
         </div>
         <select
           value={item.owner ?? ""}
@@ -191,6 +257,26 @@ function IdsRow({
           {L10_PRIORITIES.filter((p) => p !== "Low").map((p) => (
             <option key={p} value={p}>
               {p}
+            </option>
+          ))}
+        </select>
+        <select
+          value={item.department ?? ""}
+          onChange={(e) =>
+            startTransition(() =>
+              updateIdsItem(item.id, { department: (e.target.value as Department) || null })
+            )
+          }
+          className={cn(
+            "cursor-pointer rounded-full border px-2 py-0.5 text-xs font-semibold",
+            getDepartmentClasses(item.department)
+          )}
+          title="Department"
+        >
+          <option value="">—</option>
+          {DEPARTMENTS.map((d) => (
+            <option key={d} value={d}>
+              {d}
             </option>
           ))}
         </select>
@@ -288,11 +374,21 @@ function IdsLongField({
   );
 }
 
-function NewIdsRow({ onCancel, onSaved }: { onCancel: () => void; onSaved: () => void }) {
+function NewIdsRow({
+  rocks,
+  onCancel,
+  onSaved
+}: {
+  rocks: Rock[];
+  onCancel: () => void;
+  onSaved: () => void;
+}) {
   const [issue, setIssue] = useState("");
   const [owner, setOwner] = useState<TeamMember | "">("");
   const [status, setStatus] = useState<IdsStatus>("Not started");
   const [priority, setPriority] = useState<L10Priority | "">("");
+  const [department, setDepartment] = useState<Department | "">("");
+  const [rockId, setRockId] = useState<number | "">("");
   const [clientInternal, setClientInternal] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [pending, startTransition] = useTransition();
@@ -311,30 +407,47 @@ function NewIdsRow({ onCancel, onSaved }: { onCancel: () => void; onSaved: () =>
         status,
         priority: priority || null,
         client_internal: tags,
-        due_date: dueDate || null
+        due_date: dueDate || null,
+        department: department || null,
+        rock_id: rockId === "" ? null : rockId
       });
       onSaved();
     });
   };
 
   return (
-    <div className="grid grid-cols-[auto_auto_minmax(0,2.5fr)_auto_auto_auto_minmax(0,1fr)_auto_auto_auto] items-center gap-2 bg-surface-alt/30 px-5 py-2.5">
+    <div className="grid grid-cols-[auto_auto_minmax(0,2.5fr)_auto_auto_auto_auto_minmax(0,1fr)_auto_auto_auto] items-center gap-2 bg-surface-alt/30 px-5 py-2.5">
       <span className="text-xs text-text-muted">▸</span>
       <span className="text-xs text-text-muted">—</span>
-      <textarea
-        ref={autoResize}
-        value={issue}
-        autoFocus
-        rows={1}
-        onInput={(e) => autoResize(e.currentTarget)}
-        onChange={(e) => setIssue(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) save();
-          if (e.key === "Escape") onCancel();
-        }}
-        placeholder="What's the issue?"
-        className="min-w-0 resize-none overflow-hidden whitespace-pre-wrap break-words rounded-md border border-border bg-surface px-2 py-1 text-sm leading-snug text-text"
-      />
+      <div className="flex min-w-0 flex-col gap-1">
+        <textarea
+          ref={autoResize}
+          value={issue}
+          autoFocus
+          rows={1}
+          onInput={(e) => autoResize(e.currentTarget)}
+          onChange={(e) => setIssue(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) save();
+            if (e.key === "Escape") onCancel();
+          }}
+          placeholder="What's the issue?"
+          className="min-w-0 resize-none overflow-hidden whitespace-pre-wrap break-words rounded-md border border-border bg-surface px-2 py-1 text-sm leading-snug text-text"
+        />
+        <select
+          value={rockId}
+          onChange={(e) => setRockId(e.target.value ? Number(e.target.value) : "")}
+          className="mx-2 w-fit rounded-md border border-border bg-surface px-2 py-0.5 text-[10px] text-text-muted"
+          title="Linked rock"
+        >
+          <option value="">— rock —</option>
+          {rocks.map((r) => (
+            <option key={r.id} value={r.id}>
+              {r.title}
+            </option>
+          ))}
+        </select>
+      </div>
       <select
         value={owner}
         onChange={(e) => setOwner(e.target.value as TeamMember | "")}
@@ -370,6 +483,19 @@ function NewIdsRow({ onCancel, onSaved }: { onCancel: () => void; onSaved: () =>
         {L10_PRIORITIES.filter((p) => p !== "Low").map((p) => (
           <option key={p} value={p}>
             {p}
+          </option>
+        ))}
+      </select>
+      <select
+        value={department}
+        onChange={(e) => setDepartment(e.target.value as Department | "")}
+        className="rounded-md border border-border bg-surface px-2 py-1 text-xs text-text"
+        title="Department"
+      >
+        <option value="">— dept —</option>
+        {DEPARTMENTS.map((d) => (
+          <option key={d} value={d}>
+            {d}
           </option>
         ))}
       </select>
