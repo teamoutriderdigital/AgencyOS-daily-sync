@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useRef } from "react";
 import { resetAndSeedRocks } from "@/lib/rocks-actions";
 import { reconcileIds, type ReconcilePlan } from "@/lib/l10-actions";
 
@@ -83,10 +83,19 @@ function RocksCard() {
   const [applied, setApplied] = useState<{ willDelete: number; willInsert: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  // Synchronous in-flight guard: useTransition's `pending` is not reliably
+  // held across the first `await` in a transition callback (nothing sets
+  // state synchronously before it), so a fast double-click on Apply could
+  // slip past the `!preview` check and fire a second concurrent apply.
+  // This ref is set/checked synchronously, so it can't race like that.
+  const applyingRef = useRef(false);
 
   const runPreview = () => {
     setError(null);
     setApplied(null);
+    // Clear any stale preview synchronously, before the new dry run is
+    // awaited, so a confirm() fired mid-flight can never show stale counts.
+    setPreview(null);
     startTransition(async () => {
       try {
         const plan = await resetAndSeedRocks(true);
@@ -98,11 +107,16 @@ function RocksCard() {
   };
 
   const runApply = () => {
+    if (applyingRef.current) return;
     if (!preview) return;
+    applyingRef.current = true;
     const ok = window.confirm(
       `This will delete ${preview.willDelete} current-quarter rocks and insert ${preview.willInsert} new ones. This cannot be undone. Continue?`
     );
-    if (!ok) return;
+    if (!ok) {
+      applyingRef.current = false;
+      return;
+    }
     setError(null);
     startTransition(async () => {
       try {
@@ -111,6 +125,8 @@ function RocksCard() {
         setPreview(null);
       } catch (e) {
         setError(errorMessage(e));
+      } finally {
+        applyingRef.current = false;
       }
     });
   };
@@ -171,10 +187,19 @@ function IdsCard() {
   const [applied, setApplied] = useState<ReconcilePlan | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  // Synchronous in-flight guard: useTransition's `pending` is not reliably
+  // held across the first `await` in a transition callback (nothing sets
+  // state synchronously before it), so a fast double-click on Apply could
+  // slip past the `!preview` check and fire a second concurrent apply.
+  // This ref is set/checked synchronously, so it can't race like that.
+  const applyingRef = useRef(false);
 
   const runPreview = () => {
     setError(null);
     setApplied(null);
+    // Clear any stale preview synchronously, before the new dry run is
+    // awaited, so a confirm() fired mid-flight can never show stale counts.
+    setPreview(null);
     startTransition(async () => {
       try {
         const plan = await reconcileIds(true);
@@ -186,11 +211,16 @@ function IdsCard() {
   };
 
   const runApply = () => {
+    if (applyingRef.current) return;
     if (!preview) return;
+    applyingRef.current = true;
     const ok = window.confirm(
       `This will archive ${preview.toArchive.length} open IDS issue(s) and insert ${preview.toInsert.length} canonical issue(s). Continue?`
     );
-    if (!ok) return;
+    if (!ok) {
+      applyingRef.current = false;
+      return;
+    }
     setError(null);
     startTransition(async () => {
       try {
@@ -199,6 +229,8 @@ function IdsCard() {
         setPreview(null);
       } catch (e) {
         setError(errorMessage(e));
+      } finally {
+        applyingRef.current = false;
       }
     });
   };
