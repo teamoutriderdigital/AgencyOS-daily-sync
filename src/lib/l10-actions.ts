@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "./supabase-server";
 import type { Department, IdsStatus, L10Priority, TeamMember } from "./database.types";
+import { CANONICAL_IDS } from "./reconcile-ids";
 
 function revalidateDaily() {
   // To-dos and IDS are shared master state shown on both the daily and weekly
@@ -112,6 +113,57 @@ export async function upvoteIdsItem(id: number) {
   const { error } = await supabase.rpc("upvote_ids_item", { item_id: id });
   if (error) throw new Error(error.message);
   revalidateDaily();
+}
+
+export type ReconcilePlan = {
+  toArchive: { id: number; issue: string }[];
+  toInsert: string[];
+  unchanged: number;
+};
+
+// Reconcile live IDS against the rocks: archive open issues not in the canonical
+// set, insert any canonical issue missing (matched case-insensitively by text),
+// linking each to its rock. Guarded: dryRun returns the plan and mutates nothing.
+export async function reconcileIds(dryRun: boolean): Promise<ReconcilePlan> {
+  const supabase = createClient();
+  const [{ data: open, error: idsErr }, { data: rocks, error: rocksErr }] = await Promise.all([
+    supabase.from("ids_items").select("id, issue").eq("archived", false),
+    supabase.from("rocks").select("id, title")
+  ]);
+  if (idsErr) throw new Error(idsErr.message);
+  if (rocksErr) throw new Error(rocksErr.message);
+
+  const norm = (s: string) => s.trim().toLowerCase();
+  const canonicalSet = new Set(CANONICAL_IDS.map((c) => norm(c.issue)));
+  const openByText = new Map((open ?? []).map((o) => [norm(o.issue), o]));
+
+  const toArchive = (open ?? []).filter((o) => !canonicalSet.has(norm(o.issue)));
+  const toInsert = CANONICAL_IDS.filter((c) => !openByText.has(norm(c.issue)));
+  const plan: ReconcilePlan = {
+    toArchive: toArchive.map((o) => ({ id: o.id, issue: o.issue })),
+    toInsert: toInsert.map((c) => c.issue),
+    unchanged: CANONICAL_IDS.length - toInsert.length
+  };
+  if (dryRun) return plan;
+
+  const rockIdByTitle = new Map((rocks ?? []).map((r) => [r.title, r.id]));
+  for (const o of toArchive) {
+    const { error } = await supabase.from("ids_items").update({ archived: true }).eq("id", o.id);
+    if (error) throw new Error(error.message);
+  }
+  for (const c of toInsert) {
+    const { error } = await supabase.from("ids_items").insert({
+      issue: c.issue,
+      owner: c.owner,
+      priority: c.priority,
+      department: c.department,
+      rock_id: c.rockTitle ? rockIdByTitle.get(c.rockTitle) ?? null : null,
+      status: "Not started"
+    });
+    if (error) throw new Error(error.message);
+  }
+  revalidateDaily();
+  return plan;
 }
 
 // ─── Weekly carryover ────────────────────────────────────────────────────────
