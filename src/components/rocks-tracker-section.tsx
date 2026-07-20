@@ -6,6 +6,8 @@ import { ROCK_OWNERS, type Rock } from "@/lib/rocks";
 import { setRockStatus } from "@/lib/rocks-actions";
 import type { RockStatus } from "@/lib/database.types";
 import { getDepartmentClasses, groupByDepartment } from "@/lib/department";
+import { summaryKey } from "@/lib/summaries";
+import type { ItemSummary } from "@/lib/summaries";
 import { SectionShell } from "./section-shell";
 
 const ROCK_STATUSES: RockStatus[] = ["On track", "Off track", "Done"];
@@ -54,7 +56,15 @@ function groupByOwner(rocks: Rock[]): { owner: string; rocks: Rock[] }[] {
 // Weekly rock review: the finalized rocks grouped by owner, each with a status
 // toggle (On track / Off track / Done). Shows the team's on-track percentage —
 // "on track" counts anything not Off track (Done rocks are wins, not risks).
-export function RocksTrackerSection({ rocks, quarter }: { rocks: Rock[]; quarter: string }) {
+export function RocksTrackerSection({
+  rocks,
+  quarter,
+  summaries
+}: {
+  rocks: Rock[];
+  quarter: string;
+  summaries: Map<string, ItemSummary>;
+}) {
   const forQuarter = useMemo(() => rocks.filter((r) => r.quarter === quarter), [rocks, quarter]);
 
   const onTrackPct = useMemo(() => onTrackPctFor(forQuarter), [forQuarter]);
@@ -109,7 +119,7 @@ export function RocksTrackerSection({ rocks, quarter }: { rocks: Rock[]; quarter
                       </p>
                       <div className="grid gap-2 sm:grid-cols-2">
                         {g.rocks.map((rock) => (
-                          <RockCard key={rock.id} rock={rock} />
+                          <RockCard key={rock.id} rock={rock} summaries={summaries} />
                         ))}
                       </div>
                     </div>
@@ -124,7 +134,7 @@ export function RocksTrackerSection({ rocks, quarter }: { rocks: Rock[]; quarter
   );
 }
 
-function RockCard({ rock }: { rock: Rock }) {
+function RockCard({ rock, summaries }: { rock: Rock; summaries: Map<string, ItemSummary> }) {
   const [, startTransition] = useTransition();
   return (
     <div className="rounded-lg border border-border bg-surface-alt/40 px-3 py-2">
@@ -159,6 +169,12 @@ function RockCard({ rock }: { rock: Rock }) {
         </select>
       </div>
       {rock.smart && <p className="mt-1 line-clamp-2 text-xs text-text-muted">{rock.smart}</p>}
+      {summaries.get(summaryKey("rock", rock.id)) && (
+        <p className="mt-1 rounded bg-surface-alt/60 px-2 py-1 text-[11px] italic text-text-muted">
+          <span className="font-semibold not-italic">Last meeting: </span>
+          {summaries.get(summaryKey("rock", rock.id))!.summary}
+        </p>
+      )}
     </div>
   );
 }

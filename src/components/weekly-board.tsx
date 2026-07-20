@@ -20,6 +20,7 @@ import {
 import { triggerWeeklySync } from "@/lib/l10-actions";
 import type { Innovation } from "@/lib/innovations";
 import type { BacklogItem } from "@/lib/backlog";
+import { indexSummaries, type ItemSummary } from "@/lib/summaries";
 import { IdsSection } from "./ids-section";
 import { ActionItemsSection } from "./action-items-section";
 import { RocksTrackerSection } from "./rocks-tracker-section";
@@ -46,6 +47,7 @@ export function WeeklyBoard({ initialSnapshot }: Props) {
   const [ratings, setRatings] = useState<MeetingRating[]>(initialSnapshot.ratings);
   const [innovations, setInnovations] = useState<Innovation[]>(initialSnapshot.innovations);
   const [backlogItems, setBacklogItems] = useState<BacklogItem[]>(initialSnapshot.backlogItems);
+  const [summaries, setSummaries] = useState<ItemSummary[]>(initialSnapshot.summaries);
   const [syncing, startSync] = useTransition();
 
   // A week's meeting rating is stored under that week's Monday (UTC).
@@ -227,6 +229,47 @@ export function WeeklyBoard({ initialSnapshot }: Props) {
     };
   }, [supabase, ratingDate]);
 
+  // ─── Cached AI summaries — scoped to the selected ISO week ─────────────────
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      const { data, error } = await supabase
+        .from("item_summaries")
+        .select("*")
+        .eq("week_number", selected.week)
+        .eq("year_number", selected.year);
+      if (!active || error) return;
+      setSummaries(data ?? []);
+    })();
+
+    const summariesChannel = supabase
+      .channel(`weekly:item_summaries:${selected.year}-${selected.week}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "item_summaries" }, (payload) => {
+        if (payload.eventType === "DELETE") {
+          const oldId = (payload.old as { id: number }).id;
+          setSummaries((prev) => prev.filter((s) => s.id !== oldId));
+          return;
+        }
+        const row = payload.new as ItemSummary;
+        if (row.week_number !== selected.week || row.year_number !== selected.year) return;
+        setSummaries((prev) => {
+          const idx = prev.findIndex((s) => s.id === row.id);
+          if (idx === -1) return [...prev, row];
+          const copy = [...prev];
+          copy[idx] = row;
+          return copy;
+        });
+      })
+      .subscribe();
+
+    return () => {
+      active = false;
+      supabase.removeChannel(summariesChannel);
+    };
+  }, [supabase, selected]);
+
+  const summaryIndex = useMemo(() => indexSummaries(summaries), [summaries]);
+
   const weekActions = useMemo(
     () => actionItems.filter((i) => itemInWeek(i, selected, current)),
     [actionItems, selected, current]
@@ -300,7 +343,7 @@ export function WeeklyBoard({ initialSnapshot }: Props) {
         </div>
       )}
 
-      <RocksTrackerSection rocks={rocks} quarter={QUARTER} />
+      <RocksTrackerSection rocks={rocks} quarter={QUARTER} summaries={summaryIndex} />
       <CompletedSection
         rocks={rocks}
         idsItems={idsItems}
@@ -309,7 +352,7 @@ export function WeeklyBoard({ initialSnapshot }: Props) {
         weekEndISO={weekEndISO}
       />
       <ClientStagesSection clients={clients} />
-      <IdsSection items={weekIds} rocks={rocks} />
+      <IdsSection items={weekIds} rocks={rocks} summaries={summaryIndex} />
       <ActionItemsSection items={weekActions} />
       <InnovationSection items={innovations} />
       <BacklogSection items={backlogItems} />
