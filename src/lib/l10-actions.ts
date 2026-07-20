@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "./supabase-server";
-import type { IdsStatus, L10Priority, TeamMember } from "./database.types";
+import type { Department, IdsStatus, L10Priority, TeamMember } from "./database.types";
 
 function revalidateDaily() {
   // To-dos and IDS are shared master state shown on both the daily and weekly
@@ -19,6 +19,7 @@ export type ActionItemInput = {
   due_date?: string | null;
   priority?: L10Priority | null;
   done?: boolean;
+  department?: Department | null;
 };
 
 export async function createActionItem(input: ActionItemInput) {
@@ -27,7 +28,8 @@ export async function createActionItem(input: ActionItemInput) {
     item: input.item,
     assignee: input.assignee ?? null,
     due_date: input.due_date ?? null,
-    priority: input.priority ?? null
+    priority: input.priority ?? null,
+    department: input.department ?? null
   });
   if (error) throw new Error(error.message);
   revalidateDaily();
@@ -67,6 +69,8 @@ export type IdsItemInput = {
   discuss?: string | null;
   solve?: string | null;
   archived?: boolean;
+  department?: Department | null;
+  rock_id?: number | null;
 };
 
 export async function createIdsItem(input: IdsItemInput) {
@@ -80,7 +84,9 @@ export async function createIdsItem(input: IdsItemInput) {
     due_date: input.due_date ?? null,
     identify: input.identify ?? null,
     discuss: input.discuss ?? null,
-    solve: input.solve ?? null
+    solve: input.solve ?? null,
+    department: input.department ?? null,
+    rock_id: input.rock_id ?? null
   });
   if (error) throw new Error(error.message);
   revalidateDaily();

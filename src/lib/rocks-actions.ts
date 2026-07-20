@@ -2,8 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "./supabase-server";
-import type { RockStatus, RockType } from "./database.types";
-import type { RockSeed } from "./rocks";
+import type { Department, RockStatus, RockType } from "./database.types";
+import { QUARTER, SEED_ROCKS, type RockSeed } from "./rocks";
 
 function revalidateRocks() {
   // Rocks are edited on the Finalize board (/rocks) and status-tracked on the
@@ -23,6 +23,8 @@ export type RockInput = {
   sort_order?: number;
   status?: RockStatus;
   quarter?: string;
+  department?: Department | null;
+  progress_note?: string | null;
 };
 
 export async function createRock(input: RockInput) {
@@ -33,7 +35,9 @@ export async function createRock(input: RockInput) {
     rock_type: input.rock_type ?? "company",
     smart: input.smart ?? null,
     deadline: input.deadline ?? null,
-    sort_order: input.sort_order ?? 0
+    sort_order: input.sort_order ?? 0,
+    department: input.department ?? null,
+    progress_note: input.progress_note ?? null
   });
   if (error) throw new Error(error.message);
   revalidateRocks();
