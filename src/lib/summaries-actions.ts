@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "./supabase-server";
 import { isoWeekStart } from "./weekly";
 import { fathomConfigured, listMeetings, transcriptToText } from "./fathom";
+import { QUARTER } from "./rocks";
 
 // Shared: fetch + flatten the selected ISO week's Fathom transcripts.
 async function weekTranscripts(
@@ -34,7 +35,7 @@ export async function generateItemSummaries(
   if (!text.trim()) return { generated: 0, skipped: ["no Fathom transcripts in week"] };
 
   const [{ data: rocks }, { data: issues }] = await Promise.all([
-    supabase.from("rocks").select("id, title"),
+    supabase.from("rocks").select("id, title").eq("quarter", QUARTER),
     supabase.from("ids_items").select("id, issue").eq("archived", false)
   ]);
 
