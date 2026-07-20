@@ -356,6 +356,7 @@ export function WeeklyBoard({ initialSnapshot }: Props) {
         headlines={initialSnapshot.dailyHeadlines}
         tasks={initialSnapshot.headlineTasks}
         date={initialSnapshot.headlinesDate}
+        clients={clients}
       />
       <IdsSection items={weekIds} rocks={rocks} summaries={summaryIndex} />
       <ActionItemsSection items={weekActions} />

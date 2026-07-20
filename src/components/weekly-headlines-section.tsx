@@ -1,22 +1,32 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState, useTransition } from "react";
 import type { DailyHeadline, HeadlineTask } from "@/lib/daily";
+import type { Client } from "@/lib/clients";
+import { clientStageClasses } from "@/lib/clients";
+import { updateHeadlineTask } from "@/lib/daily-actions";
+import { cn } from "@/lib/utils";
 import { SectionShell } from "./section-shell";
 
-// Read-only mirror of the most recent daily meeting's client headlines on the
-// weekly L10: each headline (client + update + lead) with its per-bullet tasks,
-// every task showing its responsible owner and done state. Editing still happens
-// on the daily board — this is the L10 review view.
+// The most recent daily meeting's client headlines on the weekly L10: each
+// client (name · stage · lead) with its per-bullet tasks. Every bullet shows its
+// responsible owner and a done checkbox that persists to the daily board.
 export function WeeklyHeadlinesSection({
   headlines,
   tasks,
-  date
+  date,
+  clients
 }: {
   headlines: DailyHeadline[];
   tasks: HeadlineTask[];
   date: string | null;
+  clients: Client[];
 }) {
+  const [doneById, setDoneById] = useState<Record<number, boolean>>(() =>
+    Object.fromEntries(tasks.map((t) => [t.id, t.done]))
+  );
+  const [, startTransition] = useTransition();
+
   const tasksByHeadline = useMemo(() => {
     const map = new Map<number, HeadlineTask[]>();
     for (const t of tasks) {
@@ -27,9 +37,26 @@ export function WeeklyHeadlinesSection({
     return map;
   }, [tasks]);
 
+  const stageByClient = useMemo(() => {
+    const m = new Map<string, Client["stage"]>();
+    for (const c of clients) m.set(c.name.trim().toLowerCase(), c.stage);
+    return m;
+  }, [clients]);
+
   const dateLabel = date
     ? new Date(date + "T00:00:00").toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" })
     : "";
+
+  const toggle = (id: number, next: boolean) => {
+    setDoneById((prev) => ({ ...prev, [id]: next }));
+    startTransition(async () => {
+      try {
+        await updateHeadlineTask(id, { done: next });
+      } catch {
+        setDoneById((prev) => ({ ...prev, [id]: !next })); // revert on failure
+      }
+    });
+  };
 
   return (
     <SectionShell title="Client headlines" count={headlines.length} countLabel={date ? `from ${dateLabel}` : "latest daily"}>
@@ -41,26 +68,41 @@ export function WeeklyHeadlinesSection({
         <div className="divide-y divide-border/50">
           {headlines.map((h) => {
             const hTasks = tasksByHeadline.get(h.id) ?? [];
+            const stage = h.client ? stageByClient.get(h.client.trim().toLowerCase()) : undefined;
             return (
               <div key={h.id} className="px-5 py-3">
-                <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                   {h.client && (
-                    <span className="rounded-full border border-accent/30 bg-accent/10 px-2 py-0.5 text-xs font-semibold text-accent-strong">
+                    <span className="rounded-full border border-accent/30 bg-accent/10 px-2 py-0.5 text-sm font-semibold text-accent-strong">
                       {h.client}
                     </span>
                   )}
-                  <span className="text-sm font-medium text-text">{h.text}</span>
+                  {stage && (
+                    <span className={cn("rounded-full border px-2 py-0.5 text-[11px] font-semibold", clientStageClasses(stage))}>
+                      {stage}
+                    </span>
+                  )}
                   {h.owner && <OwnerTag owner={h.owner} lead />}
+                  {h.text && <span className="text-sm text-text-muted">{h.text}</span>}
                 </div>
                 {hTasks.length > 0 && (
-                  <ul className="mt-2 space-y-1 pl-1">
-                    {hTasks.map((t) => (
-                      <li key={t.id} className="flex items-start gap-2 text-sm">
-                        <span className={t.done ? "text-green-600" : "text-text-muted"}>{t.done ? "✓" : "•"}</span>
-                        <span className={t.done ? "text-text-muted line-through" : "text-text"}>{t.text}</span>
-                        {t.owner && <OwnerTag owner={t.owner} />}
-                      </li>
-                    ))}
+                  <ul className="mt-2 space-y-1.5 pl-0.5">
+                    {hTasks.map((t) => {
+                      const done = doneById[t.id] ?? t.done;
+                      return (
+                        <li key={t.id} className="flex items-start gap-2 text-sm">
+                          <input
+                            type="checkbox"
+                            checked={done}
+                            onChange={(e) => toggle(t.id, e.target.checked)}
+                            className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 cursor-pointer accent-green-600"
+                            title={done ? "Mark not done" : "Mark done"}
+                          />
+                          <span className={done ? "text-text-muted line-through" : "text-text"}>{t.text}</span>
+                          {t.owner && <OwnerTag owner={t.owner} />}
+                        </li>
+                      );
+                    })}
                   </ul>
                 )}
               </div>
