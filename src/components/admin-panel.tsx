@@ -3,6 +3,8 @@
 import { useState, useTransition, useRef } from "react";
 import { resetAndSeedRocks } from "@/lib/rocks-actions";
 import { reconcileIds, type ReconcilePlan } from "@/lib/l10-actions";
+import { generateItemSummaries, extractBacklogFromFathom } from "@/lib/summaries-actions";
+import { currentIsoWeek } from "@/lib/weekly";
 
 // Operator-only controls for two live-data maintenance actions. Both are
 // destructive-ish (delete + re-insert), so neither can be applied cold: a dry
@@ -253,6 +255,61 @@ function IdsCard() {
   );
 }
 
+// ─── Refresh AI summaries ───────────────────────────────────────────────────
+
+function SummariesCard() {
+  const [result, setResult] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+  // Synchronous in-flight guard: useTransition's `pending` is not reliably
+  // held across the first `await` in a transition callback (nothing sets
+  // state synchronously before it), so a fast double-click on Refresh could
+  // slip past and fire a second concurrent run. This ref is set/checked
+  // synchronously, so it can't race like that.
+  const applyingRef = useRef(false);
+
+  const runRefresh = () => {
+    if (applyingRef.current) return;
+    applyingRef.current = true;
+    setError(null);
+    setResult(null);
+    const { year, week } = currentIsoWeek();
+    startTransition(async () => {
+      try {
+        const s = await generateItemSummaries(year, week);
+        const b = await extractBacklogFromFathom(year, week);
+        setResult(
+          `Generated ${s.generated} summaries, inserted ${b.inserted} backlog items (skipped ${s.skipped.length}).`
+        );
+      } catch (e) {
+        setError(errorMessage(e));
+      } finally {
+        applyingRef.current = false;
+      }
+    });
+  };
+
+  return (
+    <Card
+      title="Refresh AI summaries (this week)"
+      description="Generates item summaries and extracts backlog items from this week's Fathom transcripts. Non-destructive — safe to re-run; summaries upsert and backlog inserts are deduped."
+    >
+      <ButtonRow>
+        <button
+          type="button"
+          onClick={runRefresh}
+          disabled={pending}
+          className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-text-inverse hover:bg-accent-strong disabled:opacity-50"
+        >
+          {pending ? "Refreshing…" : "Refresh"}
+        </button>
+      </ButtonRow>
+      {result && <p className="text-sm font-medium text-green-700">{result}</p>}
+      <ErrorNote message={error} />
+    </Card>
+  );
+}
+
 export function AdminPanel() {
   return (
     <div className="space-y-6">
@@ -262,6 +319,7 @@ export function AdminPanel() {
       </p>
       <RocksCard />
       <IdsCard />
+      <SummariesCard />
     </div>
   );
 }
