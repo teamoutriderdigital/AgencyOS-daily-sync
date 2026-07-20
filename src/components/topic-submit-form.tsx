@@ -2,9 +2,10 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { createIdsItem } from "@/lib/l10-actions";
-import { L10_PRIORITIES } from "@/lib/l10";
+import { createIdsItem, upvoteIdsItem } from "@/lib/l10-actions";
+import { L10_PRIORITIES, getPriorityClasses, type IdsItem } from "@/lib/l10";
 import { OWNERS } from "@/lib/team";
 import type { L10Priority, TeamMember } from "@/lib/database.types";
 
@@ -18,7 +19,14 @@ const KINDS: Kind[] = ["Client", "Internal", "Other"];
 //   • Other    — free text for anything else
 // It writes an ids_items row via the same server action the board uses; the
 // topic lands in the queue and can be upvoted.
-export function TopicSubmitForm({ clients }: { clients: string[] }) {
+export function TopicSubmitForm({
+  clients,
+  openItems
+}: {
+  clients: string[];
+  openItems: IdsItem[];
+}) {
+  const router = useRouter();
   const [issue, setIssue] = useState("");
   const [owner, setOwner] = useState<TeamMember | "">("");
   const [priority, setPriority] = useState<L10Priority | "">("");
@@ -57,6 +65,8 @@ export function TopicSubmitForm({ clients }: { clients: string[] }) {
       setPriority("");
       setOtherText("");
       setDone(true);
+      // Pull the freshly-added topic into the "already in the queue" list below.
+      router.refresh();
     });
   };
 
@@ -204,6 +214,100 @@ export function TopicSubmitForm({ clients }: { clients: string[] }) {
           <p className="text-center text-xs text-text-muted">Tip: ⌘/Ctrl + Enter to submit.</p>
         </div>
       </div>
+
+      {/* Already in the queue — see what's open and upvote it instead of
+          filing a duplicate. Sorted most-upvoted first, then newest. */}
+      <div className="mt-6">
+        <h2 className="px-1 text-sm font-semibold text-text">
+          Already in the queue{" "}
+          <span className="font-normal text-text-muted">({openItems.length})</span>
+        </h2>
+        {openItems.length === 0 ? (
+          <p className="mt-2 px-1 text-sm italic text-text-muted">
+            Nothing open right now — be the first to add a topic above.
+          </p>
+        ) : (
+          <ul className="mt-2 space-y-2">
+            {[...openItems]
+              .sort((a, b) =>
+                b.upvotes !== a.upvotes
+                  ? b.upvotes - a.upvotes
+                  : new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+              )
+              .map((item) => (
+                <QueueRow key={item.id} item={item} />
+              ))}
+          </ul>
+        )}
+      </div>
     </div>
+  );
+}
+
+// One open topic in the public queue, with an upvote button. Upvoting is
+// optimistic (the count bumps immediately) and calls the same server action the
+// board uses; anyone with the link can vote, no sign-in needed.
+function QueueRow({ item }: { item: IdsItem }) {
+  const [votes, setVotes] = useState(item.upvotes);
+  const [voted, setVoted] = useState(false);
+  const [pending, startTransition] = useTransition();
+
+  const upvote = () => {
+    if (voted) return;
+    setVotes((v) => v + 1);
+    setVoted(true);
+    startTransition(async () => {
+      try {
+        await upvoteIdsItem(item.id);
+      } catch {
+        // Roll back the optimistic bump if the vote didn't land.
+        setVotes((v) => v - 1);
+        setVoted(false);
+      }
+    });
+  };
+
+  return (
+    <li className="flex items-start gap-3 rounded-xl border border-border bg-surface px-3 py-2.5">
+      <button
+        type="button"
+        onClick={upvote}
+        disabled={pending || voted}
+        title={voted ? "Voted" : "Upvote this topic"}
+        className={cn(
+          "flex shrink-0 flex-col items-center rounded-md border px-2.5 py-1 text-xs font-medium transition-colors",
+          voted
+            ? "border-accent/50 text-accent"
+            : "border-border text-text-muted hover:border-accent/50 hover:text-accent",
+          "disabled:cursor-default"
+        )}
+      >
+        <span aria-hidden>👍</span>
+        <span className="tabular-nums">{votes}</span>
+      </button>
+      <div className="min-w-0 flex-1">
+        <p className="whitespace-pre-wrap break-words text-sm text-text">{item.issue}</p>
+        <div className="mt-1 flex flex-wrap items-center gap-1.5">
+          {item.client_internal.map((tag) => (
+            <span
+              key={tag}
+              className="rounded-full border border-border bg-surface-alt px-2 py-0.5 text-[11px] text-text-muted"
+            >
+              {tag}
+            </span>
+          ))}
+          {item.priority && (
+            <span
+              className={cn(
+                "rounded-full border px-2 py-0.5 text-[11px] font-semibold",
+                getPriorityClasses(item.priority)
+              )}
+            >
+              {item.priority}
+            </span>
+          )}
+        </div>
+      </div>
+    </li>
   );
 }
