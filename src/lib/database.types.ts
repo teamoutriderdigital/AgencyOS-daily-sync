@@ -7,6 +7,7 @@ export type IdsStatus = "Not started" | "Block" | "In progress" | "Solved";
 export type AttendanceStatus = "Present" | "Out";
 export type RockType = "company" | "individual";
 export type RockStatus = "On track" | "Off track" | "Done";
+export type Department = "Admin" | "Growth" | "Internal";
 export type ClientStage = "Onboarding" | "Active" | "At Risk" | "Delivered" | "Churned";
 
 export interface Database {
@@ -26,6 +27,8 @@ export interface Database {
           week_number: number | null;
           year_number: number | null;
           carried_from_week: number | null;
+          department: Department | null;
+          completed_at: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -55,6 +58,9 @@ export interface Database {
           week_number: number | null;
           year_number: number | null;
           carried_from_week: number | null;
+          department: Department | null;
+          rock_id: number | null;
+          completed_at: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -174,6 +180,8 @@ export interface Database {
           // Weekly tracker: reviewed status + which quarter the rock belongs to.
           status: RockStatus;
           quarter: string;
+          department: Department | null;
+          progress_note: string | null;
           created_at: string;
           updated_at: string;
         };

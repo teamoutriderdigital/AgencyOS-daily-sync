@@ -2,8 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "./supabase-server";
-import type { RockStatus, RockType } from "./database.types";
-import type { RockSeed } from "./rocks";
+import type { Department, RockStatus, RockType } from "./database.types";
+import { QUARTER, SEED_ROCKS, type RockSeed } from "./rocks";
 
 function revalidateRocks() {
   // Rocks are edited on the Finalize board (/rocks) and status-tracked on the
@@ -23,6 +23,8 @@ export type RockInput = {
   sort_order?: number;
   status?: RockStatus;
   quarter?: string;
+  department?: Department | null;
+  progress_note?: string | null;
 };
 
 export async function createRock(input: RockInput) {
@@ -33,7 +35,9 @@ export async function createRock(input: RockInput) {
     rock_type: input.rock_type ?? "company",
     smart: input.smart ?? null,
     deadline: input.deadline ?? null,
-    sort_order: input.sort_order ?? 0
+    sort_order: input.sort_order ?? 0,
+    department: input.department ?? null,
+    progress_note: input.progress_note ?? null
   });
   if (error) throw new Error(error.message);
   revalidateRocks();
@@ -69,12 +73,36 @@ export async function seedRocks(rows: RockSeed[]) {
     title: r.title,
     owner: r.owner,
     rock_type: r.rock_type,
+    department: r.department,
+    progress_note: r.progress_note,
+    status: r.status ?? "On track",
+    quarter: QUARTER,
     smart: r.smart,
     sort_order: i
   }));
   const { error } = await supabase.from("rocks").insert(payload);
   if (error) throw new Error(error.message);
   revalidateRocks();
+}
+
+// Replace the current-quarter rocks with the seed list. Guarded: dryRun returns
+// the plan and mutates nothing. A real run deletes only this quarter's rocks
+// (leaving other quarters intact), then inserts the seed. Operator-triggered.
+export async function resetAndSeedRocks(dryRun: boolean): Promise<{ willDelete: number; willInsert: number }> {
+  const supabase = createClient();
+  const { data: existing, error: readErr } = await supabase
+    .from("rocks")
+    .select("id")
+    .eq("quarter", QUARTER);
+  if (readErr) throw new Error(readErr.message);
+  const plan = { willDelete: existing?.length ?? 0, willInsert: SEED_ROCKS.length };
+  if (dryRun) return plan;
+
+  const { error: delErr } = await supabase.from("rocks").delete().eq("quarter", QUARTER);
+  if (delErr) throw new Error(delErr.message);
+  await seedRocks(SEED_ROCKS);
+  revalidateRocks();
+  return plan;
 }
 
 // ─── Keyed meeting state (decisions, collisions, checklist, facilitator) ─────
