@@ -27,6 +27,7 @@ import { RocksTrackerSection } from "./rocks-tracker-section";
 import { ClientStagesSection } from "./client-stages-section";
 import { RatingSection } from "./rating-section";
 import { CompletedSection } from "./completed-section";
+import { WeeklyHeadlinesSection } from "./weekly-headlines-section";
 import { InnovationSection } from "./innovation-section";
 import { BacklogSection } from "./backlog-section";
 
@@ -352,6 +353,11 @@ export function WeeklyBoard({ initialSnapshot }: Props) {
         weekEndISO={weekEndISO}
       />
       <ClientStagesSection clients={clients} />
+      <WeeklyHeadlinesSection
+        headlines={initialSnapshot.dailyHeadlines}
+        tasks={initialSnapshot.headlineTasks}
+        date={initialSnapshot.headlinesDate}
+      />
       <IdsSection items={weekIds} rocks={rocks} summaries={summaryIndex} />
       <ActionItemsSection items={weekActions} />
       <InnovationSection items={innovations} />
