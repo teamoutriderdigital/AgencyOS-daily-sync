@@ -83,3 +83,92 @@ export async function generateItemSummaries(
   revalidatePath("/weekly");
   return { generated, skipped };
 }
+
+// ─── Backlog extraction ──────────────────────────────────────────────────────
+
+type ExtractedBacklogItem = { title: string; detail?: string };
+
+const BACKLOG_EXTRACTION_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["items"],
+  properties: {
+    items: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["title"],
+        properties: {
+          title: { type: "string" },
+          detail: { type: "string" }
+        }
+      }
+    }
+  }
+} as const;
+
+export async function extractBacklogFromFathom(year: number, week: number): Promise<{ inserted: number }> {
+  if (!fathomConfigured() || !process.env.ANTHROPIC_API_KEY) {
+    throw new Error("Summaries need FATHOM_API_KEY and ANTHROPIC_API_KEY configured in the deployment.");
+  }
+  const supabase = createClient();
+  const anthropic = new Anthropic();
+
+  const { text, recordingIds } = await weekTranscripts(year, week);
+  if (!text.trim()) return { inserted: 0 };
+
+  const msg = await anthropic.messages.create({
+    model: "claude-opus-4-8",
+    max_tokens: 1024,
+    output_config: {
+      format: { type: "json_schema", schema: BACKLOG_EXTRACTION_SCHEMA }
+    },
+    messages: [
+      {
+        role: "user",
+        content:
+          `Read this meeting transcript and extract any parking-lot items, ` +
+          `future-client asks, or backlog ideas that were mentioned but not ` +
+          `acted on this week. If there are none, return an empty items array.\n\n` +
+          `Transcript:\n${text}`
+      }
+    ]
+  });
+
+  const block = msg.content.find((b) => b.type === "text");
+  let extracted: ExtractedBacklogItem[] = [];
+  if (block && block.type === "text") {
+    try {
+      const parsed = JSON.parse(block.text) as { items?: ExtractedBacklogItem[] };
+      extracted = Array.isArray(parsed.items) ? parsed.items : [];
+    } catch {
+      extracted = [];
+    }
+  }
+
+  const { data: existing } = await supabase.from("backlog_items").select("title");
+  const seen = new Set((existing ?? []).map((r) => r.title.trim().toLowerCase()));
+
+  let inserted = 0;
+  for (const item of extracted) {
+    const title = (item.title ?? "").trim();
+    if (!title) continue;
+    const key = title.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    const { error } = await supabase.from("backlog_items").insert({
+      title,
+      detail: item.detail ?? null,
+      source: "fathom",
+      source_ref: recordingIds.join(","),
+      reviewed: false
+    });
+    if (error) throw new Error(error.message);
+    inserted++;
+  }
+
+  revalidatePath("/weekly");
+  return { inserted };
+}
