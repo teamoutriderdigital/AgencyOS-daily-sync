@@ -256,6 +256,28 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["backlog_items"]["Row"]>;
         Relationships: [];
       };
+      item_summaries: {
+        Row: {
+          id: number;
+          item_type: string;
+          item_id: number;
+          week_number: number;
+          year_number: number;
+          summary: string;
+          source_ref: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: Partial<Database["public"]["Tables"]["item_summaries"]["Row"]> & {
+          item_type: string;
+          item_id: number;
+          week_number: number;
+          year_number: number;
+          summary: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["item_summaries"]["Row"]>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;
