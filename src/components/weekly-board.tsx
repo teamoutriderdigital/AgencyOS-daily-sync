@@ -344,7 +344,6 @@ export function WeeklyBoard({ initialSnapshot }: Props) {
         </div>
       )}
 
-      <RocksTrackerSection rocks={rocks} quarter={QUARTER} summaries={summaryIndex} />
       <CompletedSection
         rocks={rocks}
         idsItems={idsItems}
@@ -360,8 +359,10 @@ export function WeeklyBoard({ initialSnapshot }: Props) {
       />
       <IdsSection items={weekIds} rocks={rocks} summaries={summaryIndex} />
       <ActionItemsSection items={weekActions} />
-      <InnovationSection items={innovations} />
       <BacklogSection items={backlogItems} />
+      {/* Rocks moved to the end, collapsible per person; Innovation sits below it. */}
+      <RocksTrackerSection rocks={rocks} quarter={QUARTER} summaries={summaryIndex} />
+      <InnovationSection items={innovations} />
       <RatingSection ratings={ratings} date={ratingDate} />
     </div>
   );

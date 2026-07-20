@@ -1,11 +1,11 @@
 "use client";
 
-import { useMemo, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { cn } from "@/lib/utils";
 import { ROCK_OWNERS, type Rock } from "@/lib/rocks";
 import { setRockStatus } from "@/lib/rocks-actions";
 import type { RockStatus } from "@/lib/database.types";
-import { getDepartmentClasses, groupByDepartment } from "@/lib/department";
+import { getDepartmentClasses } from "@/lib/department";
 import { summaryKey } from "@/lib/summaries";
 import type { ItemSummary } from "@/lib/summaries";
 import { SectionShell } from "./section-shell";
@@ -53,9 +53,10 @@ function groupByOwner(rocks: Rock[]): { owner: string; rocks: Rock[] }[] {
   return ordered.map((owner) => ({ owner, rocks: byOwner.get(owner) ?? [] }));
 }
 
-// Weekly rock review: the finalized rocks grouped by owner, each with a status
-// toggle (On track / Off track / Done). Shows the team's on-track percentage —
-// "on track" counts anything not Off track (Done rocks are wins, not risks).
+// Weekly rock review, collapsed per person: one toggle per owner (name, rock
+// count, on-track %), expand to see their rocks. Department shows as a chip on
+// each card. Team on-track % ("on track" = anything not Off track) is in the
+// section header.
 export function RocksTrackerSection({
   rocks,
   quarter,
@@ -66,14 +67,8 @@ export function RocksTrackerSection({
   summaries: Map<string, ItemSummary>;
 }) {
   const forQuarter = useMemo(() => rocks.filter((r) => r.quarter === quarter), [rocks, quarter]);
-
   const onTrackPct = useMemo(() => onTrackPctFor(forQuarter), [forQuarter]);
-
-  // Department first (Admin → Growth → Internal → Unassigned), owner within.
-  const departmentGroups = useMemo(
-    () => groupByDepartment(forQuarter, (r) => r.department),
-    [forQuarter]
-  );
+  const ownerGroups = useMemo(() => groupByOwner(forQuarter), [forQuarter]);
 
   return (
     <SectionShell
@@ -91,46 +86,52 @@ export function RocksTrackerSection({
           No rocks for {quarter} yet. Set them in the Finalize &amp; Assign board.
         </p>
       ) : (
-        <div className="space-y-5 px-5 py-4">
-          {departmentGroups.map((dept) => {
-            const deptPct = onTrackPctFor(dept.items);
-            const ownerGroups = groupByOwner(dept.items);
-            return (
-              <div key={dept.department}>
-                <div className="mb-2 flex items-center justify-between gap-2">
-                  <span
-                    className={cn(
-                      "rounded-full border px-2 py-0.5 text-xs font-semibold",
-                      getDepartmentClasses(dept.department === "Unassigned" ? null : dept.department)
-                    )}
-                  >
-                    {dept.department}{" "}
-                    <span className="font-normal">({dept.items.length})</span>
-                  </span>
-                  <span className={cn("rounded-full border px-2 py-0.5 text-[11px] font-semibold", pctBadgeClasses(deptPct))}>
-                    {deptPct}% On Track
-                  </span>
-                </div>
-                <div className="space-y-4">
-                  {ownerGroups.map((g) => (
-                    <div key={g.owner}>
-                      <p className="mb-2 text-sm font-semibold text-text">
-                        {g.owner} <span className="text-xs font-normal text-text-muted">({g.rocks.length})</span>
-                      </p>
-                      <div className="grid gap-2 sm:grid-cols-2">
-                        {g.rocks.map((rock) => (
-                          <RockCard key={rock.id} rock={rock} summaries={summaries} />
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            );
-          })}
+        <div className="divide-y divide-border/50">
+          {ownerGroups.map((g) => (
+            <OwnerGroup key={g.owner} owner={g.owner} rocks={g.rocks} summaries={summaries} />
+          ))}
         </div>
       )}
     </SectionShell>
+  );
+}
+
+function OwnerGroup({
+  owner,
+  rocks,
+  summaries
+}: {
+  owner: string;
+  rocks: Rock[];
+  summaries: Map<string, ItemSummary>;
+}) {
+  const [open, setOpen] = useState(false);
+  const pct = onTrackPctFor(rocks);
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center justify-between gap-2 px-5 py-3 text-left hover:bg-surface-alt/40"
+        aria-expanded={open}
+      >
+        <span className="flex items-center gap-2">
+          <span className="text-xs text-text-muted">{open ? "▾" : "▸"}</span>
+          <span className="text-sm font-semibold text-text">{owner}</span>
+          <span className="text-xs font-normal text-text-muted">({rocks.length})</span>
+        </span>
+        <span className={cn("rounded-full border px-2 py-0.5 text-[11px] font-semibold", pctBadgeClasses(pct))}>
+          {pct}% On Track
+        </span>
+      </button>
+      {open && (
+        <div className="grid gap-2 px-5 pb-4 sm:grid-cols-2">
+          {rocks.map((rock) => (
+            <RockCard key={rock.id} rock={rock} summaries={summaries} />
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -143,10 +144,15 @@ function RockCard({ rock, summaries }: { rock: Rock; summaries: Map<string, Item
           <p className="truncate text-sm font-medium text-text" title={rock.title}>
             {rock.title || "(untitled rock)"}
           </p>
-          <p className="text-[11px] uppercase tracking-wide text-text-muted">
-            {rock.rock_type}
+          <p className="flex flex-wrap items-center gap-1.5 text-[11px] uppercase tracking-wide text-text-muted">
+            <span>{rock.rock_type}</span>
+            {rock.department && (
+              <span className={cn("rounded-full border px-1.5 py-0.5 text-[10px] font-semibold normal-case", getDepartmentClasses(rock.department))}>
+                {rock.department}
+              </span>
+            )}
             {rock.progress_note && (
-              <span className="ml-2 rounded-full border border-border bg-surface px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-text-muted">
+              <span className="rounded-full border border-border bg-surface px-1.5 py-0.5 text-[10px] font-semibold tabular-nums normal-case text-text-muted">
                 {rock.progress_note}
               </span>
             )}
