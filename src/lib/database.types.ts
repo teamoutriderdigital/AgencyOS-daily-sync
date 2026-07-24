@@ -10,6 +10,8 @@ export type RockStatus = "On track" | "Off track" | "Done";
 export type Department = "Admin" | "Growth" | "Internal";
 export type BacklogSource = "manual" | "fathom";
 export type ClientStage = "Onboarding" | "Active" | "At Risk" | "Delivered" | "Churned";
+export type SalesStage = "Lead" | "Proposal" | "Verbal" | "Won" | "Lost";
+export type OpsStatus = "Open" | "In progress" | "Blocked" | "Done";
 
 export interface Database {
   public: {
@@ -276,6 +278,36 @@ export interface Database {
           summary: string;
         };
         Update: Partial<Database["public"]["Tables"]["item_summaries"]["Row"]>;
+        Relationships: [];
+      };
+      // Sales pipeline — deals we're about to do. Master (not date-scoped).
+      sales_deals: {
+        Row: {
+          id: number;
+          name: string;
+          value: number | null;
+          stage: SalesStage;
+          owner: TeamMember | null;
+          expected_close: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: Partial<Database["public"]["Tables"]["sales_deals"]["Row"]>;
+        Update: Partial<Database["public"]["Tables"]["sales_deals"]["Row"]>;
+        Relationships: [];
+      };
+      // Ops task list — title + owner + status. Master (not date-scoped).
+      ops_tasks: {
+        Row: {
+          id: number;
+          title: string;
+          owner: TeamMember | null;
+          status: OpsStatus;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: Partial<Database["public"]["Tables"]["ops_tasks"]["Row"]>;
+        Update: Partial<Database["public"]["Tables"]["ops_tasks"]["Row"]>;
         Relationships: [];
       };
     };
