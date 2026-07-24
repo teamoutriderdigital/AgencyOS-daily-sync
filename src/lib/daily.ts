@@ -28,7 +28,7 @@ export const CLIENTS = ["Redstone", "SBD", "COD", "Vital"];
 // The daily sections render from this single constant. IDS lives on the WEEKLY
 // board, not here — the daily standup runs check-in → headlines → items to
 // review for the day → to-dos. Reordering is a one-line change here.
-export const AGENDA_ORDER = ["checkin", "headlines", "review", "todos"] as const;
+export const AGENDA_ORDER = ["checkin", "headlines", "review", "todos", "sales", "ops"] as const;
 export type AgendaSection = (typeof AGENDA_ORDER)[number];
 
 // ─── Date helpers ───────────────────────────────────────────────────────────

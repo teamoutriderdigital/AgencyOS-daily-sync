@@ -7,12 +7,16 @@ import type { DailyCheckin, DailyHeadline, DailyReviewItem, HeadlineTask } from 
 import { AGENDA_ORDER } from "@/lib/daily";
 import type { DailySnapshot } from "@/lib/daily-server";
 import type { TeamMember } from "@/lib/database.types";
+import type { SalesDeal } from "@/lib/sales";
+import type { OpsTask } from "@/lib/ops";
 import { OWNERS } from "@/lib/team";
 import { ActionItemsSection } from "./action-items-section";
 import { ReviewSection } from "./review-section";
 import { DateHeader } from "./date-header";
 import { CheckinSection } from "./checkin-section";
 import { HeadlinesSection } from "./headlines-section";
+import { SalesSection } from "./sales-section";
+import { OpsSection } from "./ops-section";
 
 const MEMBER_KEY = "daily-sync:member";
 
@@ -36,6 +40,8 @@ export function DailyBoard({ initialSnapshot, today, knownClients }: Props) {
   const [headlineTasks, setHeadlineTasks] = useState<HeadlineTask[]>(initialSnapshot.headlineTasks);
   const [reviewItems, setReviewItems] = useState<DailyReviewItem[]>(initialSnapshot.reviewItems);
   const [actionItems, setActionItems] = useState<ActionItem[]>(initialSnapshot.actionItems);
+  const [salesDeals, setSalesDeals] = useState<SalesDeal[]>(initialSnapshot.salesDeals);
+  const [opsTasks, setOpsTasks] = useState<OpsTask[]>(initialSnapshot.opsTasks);
 
   // Remember "who am I" across sessions (stands in for auth).
   useEffect(() => {
@@ -69,8 +75,48 @@ export function DailyBoard({ initialSnapshot, today, knownClients }: Props) {
       )
       .subscribe();
 
+    const salesChannel = supabase
+      .channel("daily:sales_deals")
+      .on("postgres_changes", { event: "*", schema: "public", table: "sales_deals" }, (payload) => {
+        if (payload.eventType === "DELETE") {
+          const oldId = (payload.old as { id: number }).id;
+          setSalesDeals((prev) => prev.filter((d) => d.id !== oldId));
+          return;
+        }
+        const row = payload.new as SalesDeal;
+        setSalesDeals((prev) => {
+          const idx = prev.findIndex((d) => d.id === row.id);
+          if (idx === -1) return [...prev, row];
+          const copy = [...prev];
+          copy[idx] = row;
+          return copy;
+        });
+      })
+      .subscribe();
+
+    const opsChannel = supabase
+      .channel("daily:ops_tasks")
+      .on("postgres_changes", { event: "*", schema: "public", table: "ops_tasks" }, (payload) => {
+        if (payload.eventType === "DELETE") {
+          const oldId = (payload.old as { id: number }).id;
+          setOpsTasks((prev) => prev.filter((t) => t.id !== oldId));
+          return;
+        }
+        const row = payload.new as OpsTask;
+        setOpsTasks((prev) => {
+          const idx = prev.findIndex((t) => t.id === row.id);
+          if (idx === -1) return [...prev, row];
+          const copy = [...prev];
+          copy[idx] = row;
+          return copy;
+        });
+      })
+      .subscribe();
+
     return () => {
       supabase.removeChannel(actionChannel);
+      supabase.removeChannel(salesChannel);
+      supabase.removeChannel(opsChannel);
     };
   }, [supabase]);
 
@@ -221,7 +267,9 @@ export function DailyBoard({ initialSnapshot, today, knownClients }: Props) {
     review: (
       <ReviewSection key="review" items={reviewItems} date={date} currentMember={currentMember} />
     ),
-    todos: <ActionItemsSection key="todos" items={actionItems} />
+    todos: <ActionItemsSection key="todos" items={actionItems} />,
+    sales: <SalesSection key="sales" deals={salesDeals} />,
+    ops: <OpsSection key="ops" tasks={opsTasks} />
   };
 
   return (

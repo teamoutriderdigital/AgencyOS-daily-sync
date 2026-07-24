@@ -1,6 +1,8 @@
 import { createClient } from "./supabase-server";
 import type { ActionItem } from "./l10";
 import type { DailyCheckin, DailyHeadline, DailyReviewItem, HeadlineTask } from "./daily";
+import type { SalesDeal } from "./sales";
+import type { OpsTask } from "./ops";
 
 export type DailySnapshot = {
   date: string;
@@ -9,10 +11,21 @@ export type DailySnapshot = {
   headlineTasks: HeadlineTask[];
   reviewItems: DailyReviewItem[];
   actionItems: ActionItem[];
+  salesDeals: SalesDeal[];
+  opsTasks: OpsTask[];
 };
 
 function emptySnapshot(date: string): DailySnapshot {
-  return { date, checkins: [], headlines: [], headlineTasks: [], reviewItems: [], actionItems: [] };
+  return {
+    date,
+    checkins: [],
+    headlines: [],
+    headlineTasks: [],
+    reviewItems: [],
+    actionItems: [],
+    salesDeals: [],
+    opsTasks: []
+  };
 }
 
 export async function getDailySnapshot(date: string): Promise<DailySnapshot> {
@@ -33,7 +46,15 @@ export async function getDailySnapshot(date: string): Promise<DailySnapshot> {
 async function loadSnapshot(date: string): Promise<DailySnapshot> {
   const supabase = createClient();
 
-  const [checkinsResp, headlinesResp, headlineTasksResp, reviewResp, actionResp] = await Promise.all([
+  const [
+    checkinsResp,
+    headlinesResp,
+    headlineTasksResp,
+    reviewResp,
+    actionResp,
+    salesResp,
+    opsResp
+  ] = await Promise.all([
     supabase.from("daily_checkins").select("*").eq("checkin_date", date),
     supabase
       .from("daily_headlines")
@@ -60,7 +81,10 @@ async function loadSnapshot(date: string): Promise<DailySnapshot> {
       .select("*")
       .order("done", { ascending: true })
       .order("due_date", { ascending: true, nullsFirst: false })
-      .order("created_at", { ascending: true })
+      .order("created_at", { ascending: true }),
+    // Master pipeline + ops list (not date-scoped) — newest last.
+    supabase.from("sales_deals").select("*").order("created_at", { ascending: true }),
+    supabase.from("ops_tasks").select("*").order("created_at", { ascending: true })
   ]);
 
   if (checkinsResp.error) throw new Error(checkinsResp.error.message);
@@ -74,6 +98,12 @@ async function loadSnapshot(date: string): Promise<DailySnapshot> {
   if (headlineTasksResp.error) {
     console.error("headline_tasks unavailable (run migration 010?):", headlineTasksResp.error.message);
   }
+  if (salesResp.error) {
+    console.error("sales_deals unavailable (run migration 016?):", salesResp.error.message);
+  }
+  if (opsResp.error) {
+    console.error("ops_tasks unavailable (run migration 016?):", opsResp.error.message);
+  }
 
   return {
     date,
@@ -81,7 +111,9 @@ async function loadSnapshot(date: string): Promise<DailySnapshot> {
     headlines: headlinesResp.data ?? [],
     headlineTasks: headlineTasksResp.error ? [] : headlineTasksResp.data ?? [],
     reviewItems: reviewResp.error ? [] : reviewResp.data ?? [],
-    actionItems: actionResp.data ?? []
+    actionItems: actionResp.data ?? [],
+    salesDeals: salesResp.error ? [] : salesResp.data ?? [],
+    opsTasks: opsResp.error ? [] : opsResp.data ?? []
   };
 }
 
