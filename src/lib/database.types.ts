@@ -289,6 +289,7 @@ export interface Database {
           stage: SalesStage;
           owner: TeamMember | null;
           expected_close: string | null;
+          notes: string | null;
           created_at: string;
           updated_at: string;
         };

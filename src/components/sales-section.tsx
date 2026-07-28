@@ -81,8 +81,12 @@ export function SalesSection({ deals }: { deals: SalesDeal[] }) {
 function DealRow({ deal }: { deal: SalesDeal }) {
   const [, startTransition] = useTransition();
   const closed = !isOpenDeal(deal);
+  const hasNotes = Boolean(deal.notes && deal.notes.trim());
+  // Auto-open the notes panel when there's already a note, so it's never hidden.
+  const [showNotes, setShowNotes] = useState(hasNotes);
   return (
-    <div className="flex flex-wrap items-center gap-3 px-5 py-2.5">
+    <div className="px-5 py-2.5">
+      <div className="flex flex-wrap items-center gap-3">
       <input
         type="text"
         defaultValue={deal.name}
@@ -161,6 +165,20 @@ function DealRow({ deal }: { deal: SalesDeal }) {
       </select>
       <button
         type="button"
+        onClick={() => setShowNotes((v) => !v)}
+        className={cn(
+          "rounded-md border px-2 py-0.5 text-xs",
+          hasNotes
+            ? "border-accent/40 bg-accent/10 text-accent"
+            : "border-border bg-surface text-text-muted hover:bg-surface-alt"
+        )}
+        title={hasNotes ? "Notes" : "Add notes"}
+        aria-expanded={showNotes}
+      >
+        {hasNotes ? "📝 Notes" : "＋ Note"}
+      </button>
+      <button
+        type="button"
         onClick={() => {
           if (confirm("Delete this deal?")) startTransition(() => deleteSalesDeal(deal.id));
         }}
@@ -168,6 +186,21 @@ function DealRow({ deal }: { deal: SalesDeal }) {
       >
         ✕
       </button>
+      </div>
+      {showNotes && (
+        <textarea
+          defaultValue={deal.notes ?? ""}
+          onBlur={(e) => {
+            const v = e.target.value.trim() || null;
+            if (v !== (deal.notes ?? null)) {
+              startTransition(() => updateSalesDeal(deal.id, { notes: v }));
+            }
+          }}
+          placeholder="Notes on this lead — context, next step, blockers…"
+          rows={2}
+          className="mt-2 w-full resize-y rounded-md border border-border bg-surface-alt/30 px-2 py-1.5 text-xs text-text focus:border-accent/50 focus:outline-none"
+        />
+      )}
     </div>
   );
 }
@@ -178,6 +211,7 @@ function NewDealRow({ onCancel, onSaved }: { onCancel: () => void; onSaved: () =
   const [owner, setOwner] = useState<TeamMember | "">("");
   const [expectedClose, setExpectedClose] = useState("");
   const [stage, setStage] = useState<SalesStage>("Lead");
+  const [notes, setNotes] = useState("");
   const [pending, startTransition] = useTransition();
 
   const save = () => {
@@ -189,14 +223,16 @@ function NewDealRow({ onCancel, onSaved }: { onCancel: () => void; onSaved: () =
         value: value.trim() === "" ? null : Number(value),
         owner: owner || null,
         expected_close: expectedClose || null,
-        stage
+        stage,
+        notes: notes.trim() || null
       });
       onSaved();
     });
   };
 
   return (
-    <div className="flex flex-wrap items-center gap-3 bg-surface-alt/30 px-5 py-2.5">
+    <div className="bg-surface-alt/30 px-5 py-2.5">
+      <div className="flex flex-wrap items-center gap-3">
       <input
         type="text"
         value={name}
@@ -259,6 +295,14 @@ function NewDealRow({ onCancel, onSaved }: { onCancel: () => void; onSaved: () =
       <button type="button" onClick={onCancel} className="text-xs text-text-muted hover:text-text">
         Cancel
       </button>
+      </div>
+      <textarea
+        value={notes}
+        onChange={(e) => setNotes(e.target.value)}
+        placeholder="Notes (optional) — context, next step, blockers…"
+        rows={2}
+        className="mt-2 w-full resize-y rounded-md border border-border bg-surface px-2 py-1.5 text-xs text-text focus:border-accent/50 focus:outline-none"
+      />
     </div>
   );
 }
