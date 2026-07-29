@@ -10,6 +10,7 @@ export type SalesDealInput = {
   stage?: SalesStage;
   owner?: TeamMember | null;
   expected_close?: string | null;
+  notes?: string | null;
 };
 
 function revalidateDaily() {
@@ -23,7 +24,8 @@ export async function createSalesDeal(input: SalesDealInput) {
     value: input.value ?? null,
     stage: input.stage ?? "Lead",
     owner: input.owner ?? null,
-    expected_close: input.expected_close ?? null
+    expected_close: input.expected_close ?? null,
+    notes: input.notes ?? null
   });
   if (error) throw new Error(error.message);
   revalidateDaily();
