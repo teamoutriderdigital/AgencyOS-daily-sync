@@ -3,9 +3,9 @@ import type { Department, RockStatus, RockType, Tables } from "./database.types"
 export type Rock = Tables<"rocks">;
 export type RockKv = Tables<"rock_meeting_kv">;
 
-// The rocks roster is wider than the daily team_member enum (adds Darko and
-// Mostafa), so rock owners are free text drawn from this list.
-export const ROCK_OWNERS = ["Jack", "Daniel", "Darko", "Leo", "Rehan", "Kas", "Mostafa"];
+// The rocks roster is wider than the daily team_member enum (adds Darko), so
+// rock owners are free text drawn from this list.
+export const ROCK_OWNERS = ["Jack", "Daniel", "Darko", "Leo", "Rehan", "Kas", "Rasika"];
 
 export const ROCK_TYPES: RockType[] = ["company", "individual"];
 
@@ -257,6 +257,8 @@ export const OWNER_REFERENCE: OwnerRef[] = [
   {
     name: "Mostafa",
     count: "2 rocks",
+    absent: true,
+    flag: "departed — reassign to Rasika",
     rocks: [
       "20–30 workflows: site from zero → live, incl. UX-research + nudge/conversion step",
       "Build the internal sites (agency OS, business OS, castans.com, Jack's) as the test"
@@ -380,8 +382,8 @@ export const SEED_ROCKS: RockSeed[] = [
   { title: "Data Architecture Map", owner: "Leo", rock_type: "company", department: "Internal", progress_note: "0/4", smart: "The data architecture charted end-to-end and validated." },
   { title: "Data is #1 — per-client BigQuery + Plane + Obsidian", owner: "Leo", rock_type: "company", department: "Internal", progress_note: "0/5", smart: "Per-client data lands in BigQuery, wired to Plane and Obsidian." },
   { title: "Workflows + SOPs + audit build + client data", owner: "Leo", rock_type: "company", department: "Internal", progress_note: "0/5", smart: "Client workflows, SOPs, and audit backend built on the client data model." },
-  { title: "Build 4-5 internal sites (with Mostafa)", owner: "Leo", rock_type: "company", department: "Internal", progress_note: "0/1", smart: "Four to five internal sites built with Mostafa as the workflow test." },
-  { title: "UX / user-journey skill in Claude (with Mostafa)", owner: "Leo", rock_type: "company", department: "Internal", progress_note: "0/1", smart: "A reusable UX / user-journey skill in Claude, built with Mostafa." },
+  { title: "Build 4-5 internal sites (with Rasika)", owner: "Leo", rock_type: "company", department: "Internal", progress_note: "0/1", smart: "Four to five internal sites built with Rasika as the workflow test." },
+  { title: "UX / user-journey skill in Claude (with Rasika)", owner: "Leo", rock_type: "company", department: "Internal", progress_note: "0/1", smart: "A reusable UX / user-journey skill in Claude, built with Rasika." },
   { title: "Security / access (repos, Vercel, VPS doc hosting)", owner: "Rehan", rock_type: "company", department: "Internal", progress_note: "0/32", smart: "Repos, Vercel, and VPS doc hosting access hardened to best practice." },
   { title: "Code review workflows", owner: "Rehan", rock_type: "company", department: "Internal", progress_note: "0/17", smart: "Code review workflows defined and adopted across the team." },
   { title: "G-Suite multi-domain", owner: "Rehan", rock_type: "company", department: "Internal", progress_note: "1/1", status: "Done", smart: "G-Suite set up across both domains." },

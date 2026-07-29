@@ -4,7 +4,7 @@
 
 **Cadence:** Weekly, same day + time
 **Time-box:** 60 minutes (start and end on time)
-**Attendees:** Core team (Daniel, Jack, Leo, Rehan, Kas, Mostafa; Darko as needed)
+**Attendees:** Core team (Daniel, Jack, Leo, Rehan, Kas, Rasika; Darko as needed)
 **Facilitator:** Fixed owner runs the agenda + time; a second person keeps the board updated live
 **Board:** `…/weekly` (ISO-week selector; "Sync previous week items" rolls open to-dos/issues forward)
 

@@ -1,0 +1,39 @@
+-- Mostafa has left; Rasika is the new designer. Add 'Rasika' to the team_member
+-- enum so he can be an IDS owner, to-do assignee, headline/task owner, check-in
+-- member, and rating author.
+--
+-- 'Mostafa' is deliberately NOT dropped. Postgres cannot remove a value from an
+-- enum in place, and historical rows (closed to-dos, archived issues, past
+-- check-ins and ratings) still reference it — dropping it would mean recreating
+-- the type and rewriting that history. He is removed from the pickers in
+-- src/lib/team.ts instead, so he can no longer be selected going forward.
+--
+-- Idempotent. Note: ALTER TYPE ... ADD VALUE must run on its own (not inside a
+-- transaction that then uses the value) — run this statement alone, then the
+-- reassignment block below as a second step.
+
+alter type team_member add value if not exists 'Rasika';
+
+-- ── Optional second step: hand Mostafa's OPEN work to Rasika ─────────────────
+-- Run only after confirming Rasika actually inherits it. Closed/archived rows
+-- are left alone on purpose so past weeks stay attributed to who did the work.
+--
+-- update action_items set assignee = 'Rasika'
+--   where assignee = 'Mostafa' and done = false;
+--
+-- update ids_items set owner = 'Rasika'
+--   where owner = 'Mostafa' and archived = false and status <> 'Solved';
+--
+-- update headline_tasks set owner = 'Rasika'
+--   where owner = 'Mostafa' and done = false;
+--
+-- update daily_headlines set owner = 'Rasika' where owner = 'Mostafa';
+--
+-- -- rocks.owner is free text, not the enum:
+-- update rocks set owner = 'Rasika' where owner = 'Mostafa' and status <> 'Done';
+--
+-- update sales_deals set owner = 'Rasika'
+--   where owner = 'Mostafa' and stage not in ('Won', 'Lost');
+--
+-- update ops_tasks set owner = 'Rasika'
+--   where owner = 'Mostafa' and status <> 'Done';
