@@ -7,6 +7,7 @@ import { currentIsoWeek, isoWeekStart } from "./weekly";
 import type { Innovation } from "./innovations";
 import type { BacklogItem } from "./backlog";
 import type { ItemSummary } from "./summaries";
+import type { SalesDeal } from "./sales";
 
 export type WeeklySnapshot = {
   actionItems: ActionItem[];
@@ -19,6 +20,9 @@ export type WeeklySnapshot = {
   innovations: Innovation[];
   backlogItems: BacklogItem[];
   summaries: ItemSummary[];
+  // The sales pipeline — a master list shared with the daily board (not
+  // date-scoped), so the L10 reviews the same deals the daily sync edits.
+  salesDeals: SalesDeal[];
   // The most recent daily meeting's client headlines + per-bullet tasks, mirrored
   // read-only onto the weekly L10 so the room reviews the last daily's client
   // update (headline → tasks → responsible). `headlinesDate` is that day.
@@ -42,6 +46,7 @@ function emptySnapshot(): WeeklySnapshot {
     innovations: [],
     backlogItems: [],
     summaries: [],
+    salesDeals: [],
     dailyHeadlines: [],
     headlineTasks: [],
     headlinesDate: null
@@ -78,6 +83,7 @@ export async function getWeeklySnapshot(): Promise<WeeklySnapshot> {
       innovationsResp,
       backlogResp,
       summariesResp,
+      salesResp,
       headlinesResp,
       headlineTasksResp
     ] = await Promise.all([
@@ -106,6 +112,8 @@ export async function getWeeklySnapshot(): Promise<WeeklySnapshot> {
         .select("*")
         .eq("week_number", cur.week)
         .eq("year_number", cur.year),
+      // Master pipeline (not date-scoped) — same ordering as the daily board.
+      supabase.from("sales_deals").select("*").order("created_at", { ascending: true }),
       headlinesDate
         ? supabase.from("daily_headlines").select("*").eq("headline_date", headlinesDate).order("created_at", { ascending: true })
         : emptyResp,
@@ -125,6 +133,7 @@ export async function getWeeklySnapshot(): Promise<WeeklySnapshot> {
     if (innovationsResp.error) console.error("innovations unavailable (run migration 013?):", innovationsResp.error.message);
     if (backlogResp.error) console.error("backlog_items unavailable (run migration 014?):", backlogResp.error.message);
     if (summariesResp.error) console.error("item_summaries unavailable (run migration 015?):", summariesResp.error.message);
+    if (salesResp.error) console.error("sales_deals unavailable (run migration 016?):", salesResp.error.message);
     if (headlinesResp.error) console.error("daily_headlines unavailable:", headlinesResp.error.message);
     if (headlineTasksResp.error) console.error("headline_tasks unavailable:", headlineTasksResp.error.message);
     return {
@@ -136,6 +145,7 @@ export async function getWeeklySnapshot(): Promise<WeeklySnapshot> {
       innovations: innovationsResp.error ? [] : innovationsResp.data ?? [],
       backlogItems: backlogResp.error ? [] : backlogResp.data ?? [],
       summaries: summariesResp.error ? [] : summariesResp.data ?? [],
+      salesDeals: salesResp.error ? [] : (salesResp.data as SalesDeal[]) ?? [],
       dailyHeadlines: headlinesResp.error ? [] : (headlinesResp.data as DailyHeadline[]) ?? [],
       headlineTasks: headlineTasksResp.error ? [] : (headlineTasksResp.data as HeadlineTask[]) ?? [],
       headlinesDate

@@ -12,6 +12,29 @@ export function isOpenDeal(deal: SalesDeal): boolean {
   return !CLOSED_STAGES.includes(deal.stage);
 }
 
+// How far out the "closing soon" filter looks.
+export const CLOSING_SOON_DAYS = 30;
+
+// Today as a YYYY-MM-DD string. expected_close is a bare `date` column, so
+// comparing strings avoids timezone drift that Date parsing would introduce.
+export function todayIso(): string {
+  return new Date().toLocaleDateString("en-CA");
+}
+
+// Deliberately no lower bound: a deal whose close date has already passed still
+// counts as closing soon, so one that slipped stays visible instead of dropping
+// out of the very view meant to catch it. Deals without a date never match.
+export function isClosingSoon(deal: SalesDeal, today: string): boolean {
+  if (!deal.expected_close) return false;
+  const cutoff = new Date(`${today}T00:00:00`);
+  cutoff.setDate(cutoff.getDate() + CLOSING_SOON_DAYS);
+  return deal.expected_close <= cutoff.toLocaleDateString("en-CA");
+}
+
+export function isOverdue(deal: SalesDeal, today: string): boolean {
+  return Boolean(deal.expected_close && deal.expected_close < today);
+}
+
 // Colored pill per stage — warms up as the deal advances; Won green, Lost red.
 export function getStageClasses(stage: SalesStage): string {
   switch (stage) {

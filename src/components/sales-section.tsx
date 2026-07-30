@@ -4,10 +4,14 @@ import { useMemo, useState, useTransition } from "react";
 import { cn } from "@/lib/utils";
 import { OWNERS } from "@/lib/team";
 import {
+  CLOSING_SOON_DAYS,
   SALES_STAGES,
   formatValue,
   getStageClasses,
+  isClosingSoon,
   isOpenDeal,
+  isOverdue,
+  todayIso,
   type SalesDeal
 } from "@/lib/sales";
 import { createSalesDeal, deleteSalesDeal, updateSalesDeal } from "@/lib/sales-actions";
@@ -18,17 +22,37 @@ import { SectionShell } from "./section-shell";
 // closed" is on. The header tallies the open pipeline's total value.
 export function SalesSection({ deals }: { deals: SalesDeal[] }) {
   const [showClosed, setShowClosed] = useState(false);
+  const [closingSoon, setClosingSoon] = useState(false);
   const [adding, setAdding] = useState(false);
 
+  // One clock read per render, threaded into the date helpers so they stay pure.
+  const today = todayIso();
+
   const visible = useMemo(() => {
-    const filtered = showClosed ? deals : deals.filter(isOpenDeal);
+    // The two toggles intersect rather than override: `showClosed` decides
+    // whether Won/Lost are in scope at all, `closingSoon` narrows by date.
+    let filtered = showClosed ? deals : deals.filter(isOpenDeal);
+    if (closingSoon) filtered = filtered.filter((d) => isClosingSoon(d, today));
+
+    // While filtering by date, sort by it — soonest and overdue first. Otherwise
+    // fall back to pipeline progression.
+    if (closingSoon) {
+      return [...filtered].sort((a, b) =>
+        (a.expected_close ?? "").localeCompare(b.expected_close ?? "")
+      );
+    }
     const stageRank = Object.fromEntries(SALES_STAGES.map((s, i) => [s, i]));
     return [...filtered].sort((a, b) => {
       const sr = (stageRank[a.stage] ?? 99) - (stageRank[b.stage] ?? 99);
       if (sr !== 0) return sr;
       return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
     });
-  }, [deals, showClosed]);
+  }, [deals, showClosed, closingSoon, today]);
+
+  const closingSoonCount = useMemo(
+    () => deals.filter((d) => isOpenDeal(d) && isClosingSoon(d, today)).length,
+    [deals, today]
+  );
 
   const openValue = useMemo(
     () => deals.filter(isOpenDeal).reduce((sum, d) => sum + (d.value ?? 0), 0),
@@ -45,6 +69,21 @@ export function SalesSection({ deals }: { deals: SalesDeal[] }) {
           <span className="text-xs font-medium text-text-muted" title="Open pipeline value">
             {formatValue(openValue)} open
           </span>
+          <button
+            type="button"
+            onClick={() => setClosingSoon((v) => !v)}
+            aria-pressed={closingSoon}
+            title={`Only deals with an expected close within ${CLOSING_SOON_DAYS} days (overdue included)`}
+            className={cn(
+              "rounded-full border px-2.5 py-0.5 text-xs font-medium",
+              closingSoon
+                ? "border-accent/40 bg-accent/10 text-accent"
+                : "border-border bg-surface text-text-muted hover:bg-surface-alt"
+            )}
+          >
+            Closing ≤{CLOSING_SOON_DAYS}d
+            {closingSoonCount > 0 && <span className="ml-1 font-semibold">({closingSoonCount})</span>}
+          </button>
           <label className="flex items-center gap-1 text-xs text-text-muted">
             <input
               type="checkbox"
@@ -66,11 +105,13 @@ export function SalesSection({ deals }: { deals: SalesDeal[] }) {
       <div className="divide-y divide-border/50">
         {visible.length === 0 && !adding && (
           <p className="px-5 py-6 text-center text-xs italic text-text-muted">
-            No deals in the pipeline yet.
+            {closingSoon
+              ? `No deals with an expected close within ${CLOSING_SOON_DAYS} days. Set the date field on a deal to surface it here.`
+              : "No deals in the pipeline yet."}
           </p>
         )}
         {visible.map((deal) => (
-          <DealRow key={deal.id} deal={deal} />
+          <DealRow key={deal.id} deal={deal} today={today} />
         ))}
         {adding && <NewDealRow onCancel={() => setAdding(false)} onSaved={() => setAdding(false)} />}
       </div>
@@ -78,9 +119,12 @@ export function SalesSection({ deals }: { deals: SalesDeal[] }) {
   );
 }
 
-function DealRow({ deal }: { deal: SalesDeal }) {
+function DealRow({ deal, today }: { deal: SalesDeal; today: string }) {
   const [, startTransition] = useTransition();
   const closed = !isOpenDeal(deal);
+  // Flag a slipped close date even in the unfiltered view — an open deal past
+  // its date is the signal, so it shouldn't take a toggle to notice it.
+  const overdue = !closed && isOverdue(deal, today);
   const hasNotes = Boolean(deal.notes && deal.notes.trim());
   // Auto-open the notes panel when there's already a note, so it's never hidden.
   const [showNotes, setShowNotes] = useState(hasNotes);
@@ -143,8 +187,11 @@ function DealRow({ deal }: { deal: SalesDeal }) {
             startTransition(() => updateSalesDeal(deal.id, { expected_close: v }));
           }
         }}
-        className="rounded-md border border-border bg-surface px-2 py-1 text-xs text-text"
-        title="Expected close"
+        className={cn(
+          "rounded-md border bg-surface px-2 py-1 text-xs",
+          overdue ? "border-red-300 font-semibold text-red-600" : "border-border text-text"
+        )}
+        title={overdue ? "Expected close — overdue" : "Expected close"}
       />
       <select
         value={deal.stage}
