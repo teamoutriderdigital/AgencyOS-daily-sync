@@ -34,12 +34,17 @@ export function SalesSection({ deals }: { deals: SalesDeal[] }) {
     let filtered = showClosed ? deals : deals.filter(isOpenDeal);
     if (closingSoon) filtered = filtered.filter((d) => isClosingSoon(d, today));
 
-    // While filtering by date, sort by it — soonest and overdue first. Otherwise
-    // fall back to pipeline progression.
+    // In the closing-soon view, sort by date — soonest and overdue first, since
+    // that's the axis being filtered on. Deals flagged without a date carry no
+    // urgency signal, so they sort last rather than above an overdue deal (a
+    // plain ascending sort would float their empty date to the top).
     if (closingSoon) {
-      return [...filtered].sort((a, b) =>
-        (a.expected_close ?? "").localeCompare(b.expected_close ?? "")
-      );
+      return [...filtered].sort((a, b) => {
+        if (!a.expected_close && !b.expected_close) return 0;
+        if (!a.expected_close) return 1;
+        if (!b.expected_close) return -1;
+        return a.expected_close.localeCompare(b.expected_close);
+      });
     }
     const stageRank = Object.fromEntries(SALES_STAGES.map((s, i) => [s, i]));
     return [...filtered].sort((a, b) => {
@@ -106,7 +111,7 @@ export function SalesSection({ deals }: { deals: SalesDeal[] }) {
         {visible.length === 0 && !adding && (
           <p className="px-5 py-6 text-center text-xs italic text-text-muted">
             {closingSoon
-              ? `No deals with an expected close within ${CLOSING_SOON_DAYS} days. Set the date field on a deal to surface it here.`
+              ? `Nothing marked as closing within ${CLOSING_SOON_DAYS} days. Hit "○ Closing" on a deal — or give it an expected close date — to surface it here.`
               : "No deals in the pipeline yet."}
           </p>
         )}
@@ -212,6 +217,26 @@ function DealRow({ deal, today }: { deal: SalesDeal; today: string }) {
       </select>
       <button
         type="button"
+        onClick={() =>
+          startTransition(() => updateSalesDeal(deal.id, { closing_soon: !deal.closing_soon }))
+        }
+        aria-pressed={deal.closing_soon}
+        title={
+          deal.closing_soon
+            ? `Flagged as closing within ${CLOSING_SOON_DAYS} days — click to clear`
+            : `Flag as expected to close within ${CLOSING_SOON_DAYS} days`
+        }
+        className={cn(
+          "flex-shrink-0 rounded-full border px-2 py-0.5 text-xs font-medium",
+          deal.closing_soon
+            ? "border-amber-300 bg-amber-50 text-amber-700"
+            : "border-border bg-surface text-text-muted hover:bg-surface-alt"
+        )}
+      >
+        {deal.closing_soon ? "● Closing" : "○ Closing"}
+      </button>
+      <button
+        type="button"
         onClick={() => setShowNotes((v) => !v)}
         className={cn(
           "rounded-md border px-2 py-0.5 text-xs",
@@ -259,6 +284,7 @@ function NewDealRow({ onCancel, onSaved }: { onCancel: () => void; onSaved: () =
   const [expectedClose, setExpectedClose] = useState("");
   const [stage, setStage] = useState<SalesStage>("Lead");
   const [notes, setNotes] = useState("");
+  const [flagClosingSoon, setFlagClosingSoon] = useState(false);
   const [pending, startTransition] = useTransition();
 
   const save = () => {
@@ -271,7 +297,8 @@ function NewDealRow({ onCancel, onSaved }: { onCancel: () => void; onSaved: () =
         owner: owner || null,
         expected_close: expectedClose || null,
         stage,
-        notes: notes.trim() || null
+        notes: notes.trim() || null,
+        closing_soon: flagClosingSoon
       });
       onSaved();
     });
@@ -331,6 +358,20 @@ function NewDealRow({ onCancel, onSaved }: { onCancel: () => void; onSaved: () =
           </option>
         ))}
       </select>
+      <button
+        type="button"
+        onClick={() => setFlagClosingSoon((v) => !v)}
+        aria-pressed={flagClosingSoon}
+        title={`Flag as expected to close within ${CLOSING_SOON_DAYS} days`}
+        className={cn(
+          "flex-shrink-0 rounded-full border px-2 py-0.5 text-xs font-medium",
+          flagClosingSoon
+            ? "border-amber-300 bg-amber-50 text-amber-700"
+            : "border-border bg-surface text-text-muted hover:bg-surface-alt"
+        )}
+      >
+        {flagClosingSoon ? "● Closing" : "○ Closing"}
+      </button>
       <button
         type="button"
         onClick={save}

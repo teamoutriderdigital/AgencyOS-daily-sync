@@ -11,6 +11,7 @@ export type SalesDealInput = {
   owner?: TeamMember | null;
   expected_close?: string | null;
   notes?: string | null;
+  closing_soon?: boolean;
 };
 
 // The pipeline renders on both the daily board and the weekly L10, so an edit
@@ -28,7 +29,8 @@ export async function createSalesDeal(input: SalesDealInput) {
     stage: input.stage ?? "Lead",
     owner: input.owner ?? null,
     expected_close: input.expected_close ?? null,
-    notes: input.notes ?? null
+    notes: input.notes ?? null,
+    closing_soon: input.closing_soon ?? false
   });
   if (error) throw new Error(error.message);
   revalidateSales();
