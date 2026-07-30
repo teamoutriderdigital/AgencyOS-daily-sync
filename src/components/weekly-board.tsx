@@ -22,7 +22,9 @@ import { triggerWeeklySync } from "@/lib/l10-actions";
 import type { Innovation } from "@/lib/innovations";
 import type { BacklogItem } from "@/lib/backlog";
 import { indexSummaries, type ItemSummary } from "@/lib/summaries";
+import type { SalesDeal } from "@/lib/sales";
 import { IdsSection } from "./ids-section";
+import { SalesSection } from "./sales-section";
 import { ActionItemsSection } from "./action-items-section";
 import { RocksTrackerSection } from "./rocks-tracker-section";
 import { RatingSection } from "./rating-section";
@@ -49,6 +51,7 @@ export function WeeklyBoard({ initialSnapshot }: Props) {
   const [innovations, setInnovations] = useState<Innovation[]>(initialSnapshot.innovations);
   const [backlogItems, setBacklogItems] = useState<BacklogItem[]>(initialSnapshot.backlogItems);
   const [summaries, setSummaries] = useState<ItemSummary[]>(initialSnapshot.summaries);
+  const [salesDeals, setSalesDeals] = useState<SalesDeal[]>(initialSnapshot.salesDeals);
   const [syncing, startSync] = useTransition();
 
   // A week's meeting rating is stored under that week's Monday (UTC).
@@ -182,6 +185,27 @@ export function WeeklyBoard({ initialSnapshot }: Props) {
       })
       .subscribe();
 
+    // Mirrors daily:sales_deals — the pipeline is one master list, so a stage
+    // change made on the daily board lands here mid-meeting.
+    const salesChannel = supabase
+      .channel("weekly:sales_deals")
+      .on("postgres_changes", { event: "*", schema: "public", table: "sales_deals" }, (payload) => {
+        if (payload.eventType === "DELETE") {
+          const oldId = (payload.old as { id: number }).id;
+          setSalesDeals((prev) => prev.filter((d) => d.id !== oldId));
+          return;
+        }
+        const row = payload.new as SalesDeal;
+        setSalesDeals((prev) => {
+          const idx = prev.findIndex((d) => d.id === row.id);
+          if (idx === -1) return [...prev, row];
+          const copy = [...prev];
+          copy[idx] = row;
+          return copy;
+        });
+      })
+      .subscribe();
+
     return () => {
       supabase.removeChannel(actionChannel);
       supabase.removeChannel(idsChannel);
@@ -189,6 +213,7 @@ export function WeeklyBoard({ initialSnapshot }: Props) {
       supabase.removeChannel(clientsChannel);
       supabase.removeChannel(innovationsChannel);
       supabase.removeChannel(backlogChannel);
+      supabase.removeChannel(salesChannel);
     };
   }, [supabase]);
 
@@ -366,6 +391,9 @@ export function WeeklyBoard({ initialSnapshot }: Props) {
       />
       <IdsSection items={weekIds} rocks={rocks} summaries={summaryIndex} />
       <ActionItemsSection items={weekActions} />
+      {/* Same master pipeline the daily board edits, and in the same slot
+          relative to the to-dos, so the section sits where the team expects. */}
+      <SalesSection deals={salesDeals} />
       <BacklogSection items={backlogItems} />
       {/* Rocks moved to the end, collapsible per person; Innovation sits below it. */}
       <RocksTrackerSection rocks={rocks} quarter={QUARTER} summaries={summaryIndex} />
