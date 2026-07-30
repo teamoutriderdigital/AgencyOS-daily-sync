@@ -1,9 +1,7 @@
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
 
 // ─── Enums (mirror the GrowthArchon L10 module) ─────────────────────────────
-// "Mostafa" is a departed member kept in the union (and in the DB enum) so
-// historical rows still type-check; he is not in OWNERS, so he can't be picked.
-export type TeamMember = "Jack" | "Daniel" | "Leonardo" | "Rehan" | "Kas" | "Rasika" | "Mostafa";
+export type TeamMember = "Jack" | "Daniel" | "Leonardo" | "Rehan" | "Kas" | "Rasika";
 export type L10Priority = "High" | "Medium" | "Low";
 export type IdsStatus = "Not started" | "Block" | "In progress" | "Solved";
 export type AttendanceStatus = "Present" | "Out";

@@ -182,11 +182,11 @@ export const COLLISIONS: CollisionSpec[] = [
     tag: "Collision",
     title: "SEO in the site workflow",
     parties: [
-      { who: "Mostafa", note: "owns the site workflow, “tag-teamed on SEO”" },
+      { who: "Rasika", note: "owns the site workflow, “tag-teamed on SEO”" },
       { who: "Darko", note: "SEO inside that workflow", flag: "absent" }
     ],
     recommend:
-      "Mostafa owns the workflow rock; Darko owns the SEO step as its own rock (castans.com authority to reuse). Confirm split with Darko live in item 4 — no co-ownership.",
+      "Rasika owns the workflow rock; Darko owns the SEO step as its own rock (castans.com authority to reuse). Confirm split with Darko live in item 4 — no co-ownership.",
     placeholder: "who owns the SEO step"
   },
   {
@@ -255,10 +255,8 @@ export const OWNER_REFERENCE: OwnerRef[] = [
     ]
   },
   {
-    name: "Mostafa",
+    name: "Rasika",
     count: "2 rocks",
-    absent: true,
-    flag: "departed — reassign to Rasika",
     rocks: [
       "20–30 workflows: site from zero → live, incl. UX-research + nudge/conversion step",
       "Build the internal sites (agency OS, business OS, castans.com, Jack's) as the test"
