@@ -290,6 +290,9 @@ export interface Database {
           owner: TeamMember | null;
           expected_close: string | null;
           notes: string | null;
+          // Team judgment that the deal is closing soon, independent of whether
+          // an exact expected_close is known. Feeds the closing-soon filter.
+          closing_soon: boolean;
           created_at: string;
           updated_at: string;
         };

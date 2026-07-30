@@ -23,12 +23,20 @@ export function todayIso(): string {
 
 // Deliberately no lower bound: a deal whose close date has already passed still
 // counts as closing soon, so one that slipped stays visible instead of dropping
-// out of the very view meant to catch it. Deals without a date never match.
-export function isClosingSoon(deal: SalesDeal, today: string): boolean {
+// out of the very view meant to catch it. Deals without a date never match here.
+export function isClosingSoonByDate(deal: SalesDeal, today: string): boolean {
   if (!deal.expected_close) return false;
   const cutoff = new Date(`${today}T00:00:00`);
   cutoff.setDate(cutoff.getDate() + CLOSING_SOON_DAYS);
   return deal.expected_close <= cutoff.toLocaleDateString("en-CA");
+}
+
+// Two routes into the closing-soon view, because the team has two kinds of
+// knowledge: the `closing_soon` flag ("we think this lands soon") and an actual
+// expected_close inside the window ("we know when"). Either qualifies — a
+// flagged deal doesn't need a date, and a dated deal doesn't need flagging.
+export function isClosingSoon(deal: SalesDeal, today: string): boolean {
+  return deal.closing_soon || isClosingSoonByDate(deal, today);
 }
 
 export function isOverdue(deal: SalesDeal, today: string): boolean {
