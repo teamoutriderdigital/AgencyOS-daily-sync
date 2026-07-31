@@ -228,3 +228,22 @@ export async function setMeetingRating(input: {
   if (error) throw new Error(error.message);
   revalidateDaily();
 }
+
+// ─── Pull forward ────────────────────────────────────────────────────────────
+// Copy the most recent prior day's client headlines and their UNFINISHED tasks
+// onto `date`, so a fresh board starts where the last one left off instead of
+// being retyped. A no-op when the target day already has headlines, so the
+// button is safe to press twice. Returns what it copied, for the toast.
+export async function pullForwardHeadlines(date: string) {
+  const supabase = createClient();
+  const { data, error } = await supabase.rpc("pull_forward_daily_headlines", {
+    target_date: date
+  });
+  if (error) throw new Error(error.message);
+  const row = Array.isArray(data) ? data[0] : data;
+  revalidateDaily();
+  return {
+    headlines: row?.headlines_copied ?? 0,
+    tasks: row?.tasks_copied ?? 0
+  };
+}
