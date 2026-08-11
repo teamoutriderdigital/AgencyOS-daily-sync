@@ -22,7 +22,7 @@ export function attendanceClasses(status: AttendanceStatus, active: boolean): st
 
 // Common clients, offered as quick-pick suggestions on the headlines form so
 // nobody retypes them. Free text is still allowed for anything not listed.
-export const CLIENTS = ["Redstone", "SBD", "COD", "Vital"];
+export const CLIENTS = ["Redstone", "SBD", "COD", "Vital", "Theraplay", "Key Healthcare"];
 
 // ─── Agenda order ───────────────────────────────────────────────────────────
 // The daily sections render from this single constant. IDS lives on the WEEKLY
