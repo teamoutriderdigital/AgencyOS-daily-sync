@@ -31,11 +31,17 @@ function pctBadgeClasses(pct: number): string {
       : "border-red-200 bg-red-50 text-red-700";
 }
 
-// "14/32 · Plane 10 Aug" → a 0–1 progress fraction. Done rocks count as full;
-// a note with no parsable count (e.g. "needs new checklist") renders no bar.
+// "14/32 · Plane 10 Aug" → a 0–1 progress fraction. A note that instead opens
+// with a bare percentage ("70% self-report …") uses that number directly — for
+// rocks whose owner reports progress the Plane checklist doesn't carry. Done
+// rocks count as full; a note with no parsable count (e.g. "needs new
+// checklist") renders no bar.
 function progressFraction(rock: Rock): number | null {
   if (rock.status === "Done") return 1;
-  const m = rock.progress_note?.match(/^(\d+)\s*\/\s*(\d+)/);
+  const note = rock.progress_note;
+  const pct = note?.match(/^(\d+)\s*%/);
+  if (pct) return Math.min(1, Number(pct[1]) / 100);
+  const m = note?.match(/^(\d+)\s*\/\s*(\d+)/);
   if (!m || Number(m[2]) === 0) return null;
   return Math.min(1, Number(m[1]) / Number(m[2]));
 }
