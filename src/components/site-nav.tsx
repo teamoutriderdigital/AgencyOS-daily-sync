@@ -10,6 +10,7 @@ const LINKS = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/daily", label: "Daily Sync" },
   { href: "/weekly", label: "Weekly L10" },
+  { href: "/strategy", label: "Client Strategy" },
   { href: "/rocks", label: "Q3 Rocks" },
   { href: "/admin", label: "Admin" }
 ];

@@ -300,6 +300,49 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["sales_deals"]["Row"]>;
         Relationships: [];
       };
+      // Client strategy meetings — one per (client, month). `month` is always
+      // the first day of the month. Free-text notes; action items live in
+      // strategy_actions.
+      strategy_meetings: {
+        Row: {
+          id: number;
+          client: string;
+          month: string;
+          notes: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: Partial<Database["public"]["Tables"]["strategy_meetings"]["Row"]> & {
+          client: string;
+          month: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["strategy_meetings"]["Row"]>;
+        Relationships: [];
+      };
+      // Action items under a strategy meeting. client + month denormalized
+      // from the parent so one month streams with a single filter.
+      strategy_actions: {
+        Row: {
+          id: number;
+          meeting_id: number;
+          client: string;
+          month: string;
+          text: string;
+          owner: TeamMember | null;
+          done: boolean;
+          sort_order: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: Partial<Database["public"]["Tables"]["strategy_actions"]["Row"]> & {
+          meeting_id: number;
+          client: string;
+          month: string;
+          text: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["strategy_actions"]["Row"]>;
+        Relationships: [];
+      };
       // Ops task list — title + owner + status. Master (not date-scoped).
       ops_tasks: {
         Row: {
