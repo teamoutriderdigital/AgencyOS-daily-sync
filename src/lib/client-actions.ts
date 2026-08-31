@@ -5,9 +5,11 @@ import { createClient } from "./supabase-server";
 import type { ClientStage } from "./database.types";
 
 function revalidateClients() {
-  // Clients drive the weekly stage tracker and the /submit client picker.
+  // Clients drive the weekly stage tracker, the /submit client picker, and the
+  // /strategy board's card roster.
   revalidatePath("/weekly");
   revalidatePath("/submit");
+  revalidatePath("/strategy");
 }
 
 export type ClientInput = {
@@ -16,6 +18,7 @@ export type ClientInput = {
   owner?: string | null;
   notes?: string | null;
   sort_order?: number;
+  strategy_archived?: boolean;
 };
 
 export async function addClient(input: { name: string; sort_order?: number }) {

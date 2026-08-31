@@ -202,6 +202,9 @@ export interface Database {
           owner: string | null;
           notes: string | null;
           sort_order: number;
+          // Hidden from the /strategy board (no monthly strategy meetings);
+          // independent of lifecycle stage.
+          strategy_archived: boolean;
           created_at: string;
           updated_at: string;
         };

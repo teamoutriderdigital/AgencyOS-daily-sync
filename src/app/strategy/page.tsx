@@ -21,11 +21,10 @@ export default async function StrategyPage({
       : currentMonth;
 
   const [snapshot, clients] = await Promise.all([getStrategySnapshot(month), getClients()]);
-  // Churned clients drop off the board; their past months stay reachable
-  // because the board also lists any client with saved meetings that month.
-  const clientNames = clients.filter((c) => c.stage !== "Churned").map((c) => c.name);
+  // Churned clients drop off the board entirely; the archive split (hidden but
+  // restorable) happens in the board. Past months for a churned client stay
+  // reachable because the board also lists any client with saved meetings.
+  const roster = clients.filter((c) => c.stage !== "Churned");
 
-  return (
-    <StrategyBoard initialSnapshot={snapshot} currentMonth={currentMonth} clients={clientNames} />
-  );
+  return <StrategyBoard initialSnapshot={snapshot} currentMonth={currentMonth} clients={roster} />;
 }

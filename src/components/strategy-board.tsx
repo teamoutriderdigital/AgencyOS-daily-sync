@@ -13,18 +13,20 @@ import {
   type StrategyMeeting
 } from "@/lib/strategy";
 import type { StrategySnapshot } from "@/lib/strategy-server";
+import type { Client } from "@/lib/clients";
 import {
   createStrategyAction,
   deleteStrategyAction,
   saveStrategyNotes,
   updateStrategyAction
 } from "@/lib/strategy-actions";
+import { addClient, updateClient } from "@/lib/client-actions";
 import { SectionShell } from "./section-shell";
 
 type Props = {
   initialSnapshot: StrategySnapshot;
   currentMonth: string;
-  clients: string[];
+  clients: Client[];
 };
 
 // The monthly client strategy board: one card per client per month, each with
@@ -104,15 +106,21 @@ export function StrategyBoard({ initialSnapshot, currentMonth, clients }: Props)
     };
   }, [supabase, month]);
 
-  // Card list = the client roster from the server, plus any client that has a
-  // meeting or action this month but is no longer on the roster (so history
-  // stays visible for a client that has since churned).
+  // Roster split: archived clients hide from the card list but stay restorable
+  // from the strip at the bottom. Cards also include any client that has a
+  // meeting or action this month but is off the roster entirely (churned or
+  // deleted), so history stays visible.
+  const activeClients = useMemo(() => clients.filter((c) => !c.strategy_archived), [clients]);
+  const archivedClients = useMemo(() => clients.filter((c) => c.strategy_archived), [clients]);
+
   const cardClients = useMemo(() => {
-    const set = new Set<string>(clients);
-    for (const m of meetings) set.add(m.client);
-    for (const a of actions) set.add(a.client);
-    return [...set];
-  }, [clients, meetings, actions]);
+    const byName = new Map<string, Client | null>();
+    for (const c of activeClients) byName.set(c.name, c);
+    const rosterNames = new Set(clients.map((c) => c.name));
+    for (const m of meetings) if (!rosterNames.has(m.client)) byName.set(m.client, null);
+    for (const a of actions) if (!rosterNames.has(a.client)) byName.set(a.client, null);
+    return [...byName.entries()];
+  }, [clients, activeClients, meetings, actions]);
 
   const isCurrentMonth = month === currentMonth;
 
@@ -166,6 +174,10 @@ export function StrategyBoard({ initialSnapshot, currentMonth, clients }: Props)
               </button>
             </>
           )}
+
+          <div className="ml-auto">
+            <AddClientControl />
+          </div>
         </div>
         <p className="mt-1 text-sm text-text-muted">
           Client strategy meetings — one per client per month. Capture the meeting notes and the
@@ -180,15 +192,112 @@ export function StrategyBoard({ initialSnapshot, currentMonth, clients }: Props)
         </p>
       )}
 
-      {cardClients.map((client) => (
+      {cardClients.map(([name, row]) => (
         <ClientStrategyCard
-          key={`${month}:${client}`}
-          client={client}
+          key={`${month}:${name}`}
+          client={name}
+          clientRow={row}
           month={month}
-          meeting={meetings.find((m) => m.client === client)}
-          actions={actions.filter((a) => a.client === client)}
+          meeting={meetings.find((m) => m.client === name)}
+          actions={actions.filter((a) => a.client === name)}
         />
       ))}
+
+      {archivedClients.length > 0 && <ArchivedStrip clients={archivedClients} />}
+    </div>
+  );
+}
+
+// Inline "+ Add client" control in the page header. Saves into the shared
+// clients table, so the new client also appears on the weekly stage tracker
+// and the /submit picker (stage starts at Onboarding).
+function AddClientControl() {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+  const [pending, startTransition] = useTransition();
+
+  const save = () => {
+    const v = name.trim();
+    if (!v) return;
+    startTransition(async () => {
+      await addClient({ name: v });
+      setName("");
+      setOpen(false);
+    });
+  };
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-text-inverse hover:bg-accent-strong"
+      >
+        + Add client
+      </button>
+    );
+  }
+  return (
+    <div className="flex items-center gap-2">
+      <input
+        type="text"
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") save();
+          if (e.key === "Escape") setOpen(false);
+        }}
+        autoFocus
+        placeholder="Client name"
+        className="rounded-md border border-border bg-surface px-2 py-1 text-sm text-text"
+      />
+      <button
+        type="button"
+        onClick={save}
+        disabled={pending || !name.trim()}
+        className="rounded-md bg-accent px-2 py-1 text-xs font-medium text-text-inverse hover:bg-accent-strong disabled:opacity-50"
+      >
+        Save
+      </button>
+      <button
+        type="button"
+        onClick={() => setOpen(false)}
+        className="text-xs text-text-muted hover:text-text"
+      >
+        Cancel
+      </button>
+    </div>
+  );
+}
+
+// Archived clients: hidden from the card list but one click from coming back.
+function ArchivedStrip({ clients }: { clients: Client[] }) {
+  const [, startTransition] = useTransition();
+  return (
+    <div className="rounded-2xl border border-dashed border-border bg-surface-alt/30 px-5 py-3">
+      <span className="mr-3 text-xs font-medium text-text-muted">
+        Archived ({clients.length})
+      </span>
+      <span className="inline-flex flex-wrap gap-2 align-middle">
+        {clients.map((c) => (
+          <span
+            key={c.id}
+            className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface px-2.5 py-0.5 text-xs text-text-muted"
+          >
+            {c.name}
+            <button
+              type="button"
+              onClick={() =>
+                startTransition(() => updateClient(c.id, { strategy_archived: false }))
+              }
+              className="font-medium text-accent hover:underline"
+              title="Bring this client back onto the strategy board"
+            >
+              ↩ Restore
+            </button>
+          </span>
+        ))}
+      </span>
     </div>
   );
 }
@@ -198,11 +307,15 @@ export function StrategyBoard({ initialSnapshot, currentMonth, clients }: Props)
 // or action added (see strategy-actions.ts).
 function ClientStrategyCard({
   client,
+  clientRow,
   month,
   meeting,
   actions
 }: {
   client: string;
+  // Null when the client has meeting data this month but is off the roster
+  // (churned/deleted) — those cards are history-only and can't be archived.
+  clientRow: Client | null;
   month: string;
   meeting: StrategyMeeting | undefined;
   actions: StrategyActionItem[];
@@ -217,13 +330,27 @@ function ClientStrategyCard({
       count={openCount}
       countLabel="open actions"
       rightSlot={
-        <button
-          type="button"
-          onClick={() => setAdding(true)}
-          className="rounded-md bg-accent px-3 py-1 text-xs font-medium text-text-inverse hover:bg-accent-strong"
-        >
-          + Action
-        </button>
+        <div className="flex items-center gap-2">
+          {clientRow && (
+            <button
+              type="button"
+              onClick={() =>
+                startTransition(() => updateClient(clientRow.id, { strategy_archived: true }))
+              }
+              className="rounded-md border border-border bg-surface px-2.5 py-1 text-xs font-medium text-text-muted hover:border-accent/50 hover:text-accent"
+              title="Hide this client from the strategy board (notes and actions are kept; restore from the Archived strip below)"
+            >
+              Archive
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => setAdding(true)}
+            className="rounded-md bg-accent px-3 py-1 text-xs font-medium text-text-inverse hover:bg-accent-strong"
+          >
+            + Action
+          </button>
+        </div>
       }
     >
       <div className="space-y-1 px-5 py-3">
