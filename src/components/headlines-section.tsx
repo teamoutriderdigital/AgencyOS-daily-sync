@@ -7,6 +7,7 @@ import {
   createHeadline,
   deleteHeadline,
   deleteHeadlineTask,
+  pullForwardHeadlines,
   setHeadlineOwner,
   updateHeadline,
   updateHeadlineTask
@@ -50,12 +51,17 @@ export function HeadlinesSection({
   }, [tasks]);
 
   return (
-    <SectionShell title="Client headlines" count={headlines.length} countLabel="headlines">
+    <SectionShell
+      title="Client headlines"
+      count={headlines.length}
+      countLabel="headlines"
+      rightSlot={headlines.length === 0 ? <PullForwardButton date={date} /> : undefined}
+    >
       <AddHeadlineForm date={date} currentMember={currentMember} clients={clients} />
       <div className="divide-y divide-border/50">
         {headlines.length === 0 && (
           <p className="px-5 py-6 text-center text-xs italic text-text-muted">
-            No headlines yet. Pick a client above and add the day&apos;s update.
+            No headlines yet. Pull forward the last day&apos;s board, or pick a client above.
           </p>
         )}
         {headlines.map((h) => (
@@ -69,6 +75,41 @@ export function HeadlinesSection({
         ))}
       </div>
     </SectionShell>
+  );
+}
+
+// Copies the last day's board onto this one. Only offered when the day is empty
+// — once there are headlines the RPC is a no-op, so showing it would be a lie.
+function PullForwardButton({ date }: { date: string }) {
+  const [pending, startTransition] = useTransition();
+  const [msg, setMsg] = useState("");
+
+  const run = () =>
+    startTransition(async () => {
+      setMsg("");
+      try {
+        const { headlines, tasks } = await pullForwardHeadlines(date);
+        // Zero means there was no earlier day to copy from — say so, rather
+        // than leaving the button looking broken.
+        setMsg(headlines === 0 ? "Nothing earlier to pull from" : `Pulled ${headlines} · ${tasks} tasks`);
+      } catch {
+        setMsg("Couldn't pull forward");
+      }
+    });
+
+  return (
+    <div className="flex items-center gap-2">
+      {msg && <span className="text-xs text-text-muted">{msg}</span>}
+      <button
+        type="button"
+        onClick={run}
+        disabled={pending}
+        title="Copy the last day's headlines and their unfinished tasks onto this day"
+        className="rounded-md border border-border bg-surface px-3 py-1 text-xs font-medium text-text hover:bg-surface-alt disabled:opacity-50"
+      >
+        {pending ? "Pulling…" : "↩ Pull forward"}
+      </button>
+    </div>
   );
 }
 
