@@ -152,7 +152,7 @@ async function main() {
       const touches = live.filter(item => ['started', 'unstarted'].includes(groupOf(item))).map(item => (item.updated_at || '').slice(0, 10)).filter(Boolean);
       cards.push({
         ...buildClientCard(client.name, clientRows, today, {
-          closedSinceLastMeeting, lastTouch: touches.length ? touches.sort().at(-1) : null
+          closedSinceLastMeeting, lastMeeting, lastTouch: touches.length ? touches.sort().at(-1) : null
         }),
         owner: client.owner
       });
@@ -170,7 +170,10 @@ async function main() {
   for (const warning of warnings) console.log(`  ! ${warning}`);
   console.log(`\nClient cards for ${today} (wins counted since ${lastMeeting}):`);
   for (const card of cards) {
-    console.log(`\n  ${card.client}${card.owner ? ` — ${card.owner}` : ' — no owner'}`);
+    // Show what will actually be stored: an owner outside the team list is
+    // recorded as no owner, and that gap is the point.
+    const stored = TEAM.includes(card.owner) ? card.owner : null;
+    console.log(`\n  ${card.client} — ${stored || `no owner${card.owner ? ` (${card.owner} is not on the team list)` : ''}`}`);
     console.log(`    ${card.headline}`);
     for (const task of card.tasks) console.log(`      [ ] ${task}`);
   }

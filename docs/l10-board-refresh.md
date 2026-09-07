@@ -1,5 +1,13 @@
 # L10 board refresh — 7 September 2026
 
+> **Superseded in places, 7 September.** Client work is no longer a live table
+> fetched by the deployment: rows are pushed from a trusted machine with
+> `npm run push:client-work` and rendered as per-client cards with a tick list.
+> No `PLANE_API_KEY` belongs on Vercel. The naming rules below were only ever a
+> list of eleven renamed titles; the convention is now in
+> [board-naming.md](board-naming.md). Everything about selection rules — which
+> task wins, what is excluded, how modules collapse — still holds.
+
 Kas’s 31 August feedback: update daily, use understandable titles, show one row per subproject with its latest or overdue task, make deadlines consistent, and keep backlog in Plane.
 
 ## Result
