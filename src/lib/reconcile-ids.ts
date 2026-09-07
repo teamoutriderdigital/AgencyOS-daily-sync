@@ -11,7 +11,7 @@ export const CANONICAL_IDS: {
 }[] = [
   { issue: "CX journey has two owners (Jack vs Daniel/Leo) — collapse to one rock, one owner", department: "Growth", owner: "Jack", rockTitle: "Customer-experience journey", priority: "High" },
   { issue: "Data governance must land before dependent Internal rocks (\"data first\") — sequence it", department: "Internal", owner: "Leonardo", rockTitle: "Data Architecture Map", priority: "High" },
-  { issue: "Security/access is 0/32 — scope the 32 into a datable sprint or it never closes", department: "Internal", owner: "Rehan", rockTitle: "Security / access (repos, Vercel, VPS doc hosting)", priority: "High" },
+  { issue: "Finish and share the security setup skill", department: "Internal", owner: "Rehan", rockTitle: "Security / access (repos, Vercel, VPS doc hosting)", priority: "High" },
   { issue: "Onboarding seam: Daniel owns the mechanism, Kas's audit consumes it — confirm boundary", department: "Admin", owner: "Daniel", rockTitle: "Onboarding end-to-end + team wiki", priority: "Medium" },
   { issue: "Dashboard boundary: Leo infra/vault · Kas client surface · Daniel account data — ratify", department: "Internal", owner: "Kas", rockTitle: "Client Dashboard", priority: "Medium" },
   { issue: "Plane: self-host on Ares vs status quo — confirm before AgencyOS integration build", department: "Internal", owner: "Daniel", rockTitle: "Plane / PM — self-host on Ares + AgencyOS integration", priority: "Medium" },

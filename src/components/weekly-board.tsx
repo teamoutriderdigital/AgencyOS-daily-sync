@@ -6,7 +6,6 @@ import type { ActionItem, IdsItem } from "@/lib/l10";
 import { todayLocalISO } from "@/lib/l10";
 import type { Rock } from "@/lib/rocks";
 import { QUARTER } from "@/lib/rocks";
-import type { Client } from "@/lib/clients";
 import type { MeetingRating } from "@/lib/daily";
 import type { WeeklySnapshot } from "@/lib/weekly-server";
 import {
@@ -20,7 +19,6 @@ import {
 } from "@/lib/weekly";
 import { triggerWeeklySync } from "@/lib/l10-actions";
 import type { Innovation } from "@/lib/innovations";
-import type { BacklogItem } from "@/lib/backlog";
 import { indexSummaries, type ItemSummary } from "@/lib/summaries";
 import type { SalesDeal } from "@/lib/sales";
 import { IdsSection } from "./ids-section";
@@ -29,9 +27,9 @@ import { ActionItemsSection } from "./action-items-section";
 import { RocksTrackerSection } from "./rocks-tracker-section";
 import { RatingSection } from "./rating-section";
 import { CompletedSection } from "./completed-section";
-import { HeadlinesSection } from "./headlines-section";
 import { InnovationSection } from "./innovation-section";
-import { BacklogSection } from "./backlog-section";
+import { SubprojectsSection } from "./subprojects-section";
+import { NextWeekSection } from "./next-week-section";
 
 type Props = { initialSnapshot: WeeklySnapshot };
 
@@ -46,10 +44,8 @@ export function WeeklyBoard({ initialSnapshot }: Props) {
   const [actionItems, setActionItems] = useState<ActionItem[]>(initialSnapshot.actionItems);
   const [idsItems, setIdsItems] = useState<IdsItem[]>(initialSnapshot.idsItems);
   const [rocks, setRocks] = useState<Rock[]>(initialSnapshot.rocks);
-  const [clients, setClients] = useState<Client[]>(initialSnapshot.clients);
   const [ratings, setRatings] = useState<MeetingRating[]>(initialSnapshot.ratings);
   const [innovations, setInnovations] = useState<Innovation[]>(initialSnapshot.innovations);
-  const [backlogItems, setBacklogItems] = useState<BacklogItem[]>(initialSnapshot.backlogItems);
   const [summaries, setSummaries] = useState<ItemSummary[]>(initialSnapshot.summaries);
   const [salesDeals, setSalesDeals] = useState<SalesDeal[]>(initialSnapshot.salesDeals);
   const [syncing, startSync] = useTransition();
@@ -128,25 +124,6 @@ export function WeeklyBoard({ initialSnapshot }: Props) {
       })
       .subscribe();
 
-    const clientsChannel = supabase
-      .channel("weekly:clients")
-      .on("postgres_changes", { event: "*", schema: "public", table: "clients" }, (payload) => {
-        if (payload.eventType === "DELETE") {
-          const oldId = (payload.old as { id: number }).id;
-          setClients((prev) => prev.filter((c) => c.id !== oldId));
-          return;
-        }
-        const row = payload.new as Client;
-        setClients((prev) => {
-          const idx = prev.findIndex((c) => c.id === row.id);
-          const next = idx === -1 ? [...prev, row] : prev.map((c) => (c.id === row.id ? row : c));
-          // Keep the same (sort_order, name) order the server snapshot uses, so
-          // a newly-inserted client lands in the right spot without a reload.
-          return next.sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name));
-        });
-      })
-      .subscribe();
-
     const innovationsChannel = supabase
       .channel("weekly:innovations")
       .on("postgres_changes", { event: "*", schema: "public", table: "innovations" }, (payload) => {
@@ -158,25 +135,6 @@ export function WeeklyBoard({ initialSnapshot }: Props) {
         const row = payload.new as Innovation;
         setInnovations((prev) => {
           const idx = prev.findIndex((i) => i.id === row.id);
-          if (idx === -1) return [...prev, row];
-          const copy = [...prev];
-          copy[idx] = row;
-          return copy;
-        });
-      })
-      .subscribe();
-
-    const backlogChannel = supabase
-      .channel("weekly:backlog_items")
-      .on("postgres_changes", { event: "*", schema: "public", table: "backlog_items" }, (payload) => {
-        if (payload.eventType === "DELETE") {
-          const oldId = (payload.old as { id: number }).id;
-          setBacklogItems((prev) => prev.filter((b) => b.id !== oldId));
-          return;
-        }
-        const row = payload.new as BacklogItem;
-        setBacklogItems((prev) => {
-          const idx = prev.findIndex((b) => b.id === row.id);
           if (idx === -1) return [...prev, row];
           const copy = [...prev];
           copy[idx] = row;
@@ -210,9 +168,7 @@ export function WeeklyBoard({ initialSnapshot }: Props) {
       supabase.removeChannel(actionChannel);
       supabase.removeChannel(idsChannel);
       supabase.removeChannel(rocksChannel);
-      supabase.removeChannel(clientsChannel);
       supabase.removeChannel(innovationsChannel);
-      supabase.removeChannel(backlogChannel);
       supabase.removeChannel(salesChannel);
     };
   }, [supabase]);
@@ -295,18 +251,12 @@ export function WeeklyBoard({ initialSnapshot }: Props) {
   }, [supabase, selected]);
 
   const summaryIndex = useMemo(() => indexSummaries(summaries), [summaries]);
-  const clientNames = useMemo(() => clients.map((c) => c.name), [clients]);
-  const clientStages = useMemo(
-    () => Object.fromEntries(clients.map((c) => [c.name, c.stage])),
-    [clients]
-  );
-
   const weekActions = useMemo(
-    () => actionItems.filter((i) => itemInWeek(i, selected, current)),
+    () => actionItems.filter((i) => itemInWeek(i, selected, current, !i.done)),
     [actionItems, selected, current]
   );
   const weekIds = useMemo(
-    () => idsItems.filter((i) => itemInWeek(i, selected, current)),
+    () => idsItems.filter((i) => !i.archived && i.status !== "Solved" && itemInWeek(i, selected, current, true)),
     [idsItems, selected, current]
   );
   const carriedCount = useMemo(
@@ -381,23 +331,20 @@ export function WeeklyBoard({ initialSnapshot }: Props) {
         weekStartISO={weekStartISO}
         weekEndISO={weekEndISO}
       />
-      <HeadlinesSection
-        headlines={initialSnapshot.dailyHeadlines}
-        tasks={initialSnapshot.headlineTasks}
-        date={initialSnapshot.headlinesDate ?? todayLocalISO()}
-        currentMember={null}
-        clients={clientNames}
-        clientStages={clientStages}
-      />
+      {isCurrent ? <SubprojectsSection /> : (
+        <p className="text-sm text-text-muted">Client work shows current Plane status. Jump to this week to review it; past meeting notes remain on the Daily Sync tab.</p>
+      )}
       <IdsSection items={weekIds} rocks={rocks} summaries={summaryIndex} />
       <ActionItemsSection items={weekActions} />
       {/* Same master pipeline the daily board edits, and in the same slot
           relative to the to-dos, so the section sits where the team expects. */}
       <SalesSection deals={salesDeals} />
-      <BacklogSection items={backlogItems} />
       {/* Rocks moved to the end, collapsible per person; Innovation sits below it. */}
       <RocksTrackerSection rocks={rocks} quarter={QUARTER} summaries={summaryIndex} />
       <InnovationSection items={innovations} />
+      {/* Forward-looking close: open to-dos + live rocks the team commits to for
+          next week, read out just before rating the meeting. */}
+      <NextWeekSection actionItems={actionItems} rocks={rocks} todayISO={todayLocalISO()} />
       <RatingSection ratings={ratings} date={ratingDate} />
     </div>
   );

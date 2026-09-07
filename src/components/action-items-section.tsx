@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import { boardToday, deadlineLabel } from "@/lib/subprojects";
 import { cn } from "@/lib/utils";
 import { L10_PRIORITIES, getPriorityClasses, type ActionItem } from "@/lib/l10";
 import { OWNERS } from "@/lib/team";
@@ -160,6 +161,7 @@ function ActionRow({ item }: { item: ActionItem }) {
           </option>
         ))}
       </select>
+      <div className="space-y-1">
       <input
         type="date"
         defaultValue={item.due_date ?? ""}
@@ -172,6 +174,8 @@ function ActionRow({ item }: { item: ActionItem }) {
         className="rounded-md border border-border bg-surface px-2 py-1 text-xs text-text"
         title="Due date"
       />
+        <p className="text-xs text-text-muted">{deadlineLabel(item.due_date, boardToday())}</p>
+      </div>
       <select
         value={item.priority ?? ""}
         onChange={(e) =>

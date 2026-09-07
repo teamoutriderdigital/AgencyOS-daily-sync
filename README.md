@@ -69,3 +69,11 @@ doesn't exist here). Instead:
 - `npm run build` / `npm run start` — production build
 - `npm run lint` — ESLint
 - `npm run typecheck` — `tsc --noEmit`
+
+## Current L10 client work
+
+The current Weekly L10, Dashboard and today’s Daily Sync show compact subproject
+rows read from Plane. Set the server-only `PLANE_API_KEY` and `SITE_PASSWORD` on
+the correct deployment. Use Node 22 with the currently installed Supabase client.
+See [L10 board refresh](docs/l10-board-refresh.md) for selection rules, refresh
+frequency, source cleanup and release requirements.
