@@ -100,6 +100,8 @@ is reported as a warning on the board rather than silently losing its rows, and
 a push that reads nothing at all leaves the previous snapshot in place.
 
 How every line on the board is worded — titles, owners, dates, and how gaps are
-stated — is written down in [How things are named on the board](docs/board-naming.md).
+stated — is written down in [How things are named on the board](docs/board-naming.md),
+checked beside the text box as you type, and auditable across everything already
+on the board with `npm run audit:naming`.
 See [L10 board refresh](docs/l10-board-refresh.md) for selection rules, source
 cleanup and release requirements.

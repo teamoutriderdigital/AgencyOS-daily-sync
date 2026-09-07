@@ -3,6 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import { retainIssueInPlane } from "@/lib/plane-retention-actions";
 import { boardTitle } from "@/lib/board-language";
+import { namingHint } from "@/lib/board-naming";
 import { boardToday, deadlineLabel } from "@/lib/subprojects";
 import { cn } from "@/lib/utils";
 import {
@@ -148,6 +149,14 @@ export function IdsSection({
   );
 }
 
+// Rules 1/2/3/5/7 of docs/board-naming.md, shown while the title is being
+// written. A hint, never a block — the board belongs to the person typing.
+function NamingHint({ title }: { title: string }) {
+  const hint = namingHint(title);
+  if (!hint) return null;
+  return <p className="px-2 text-xs text-amber-700">{hint} <a className="underline" href="https://github.com/teamoutriderdigital/AgencyOS-daily-sync/blob/main/daily-sync-board/docs/board-naming.md" target="_blank" rel="noreferrer">naming rules</a></p>;
+}
+
 function IdsRow({
   item,
   rocks,
@@ -162,6 +171,7 @@ function IdsRow({
   onToggle: () => void;
 }) {
   const [, startTransition] = useTransition();
+  const [draftTitle, setDraftTitle] = useState(boardTitle(item.issue));
   const linkedRock = item.rock_id != null ? rocks.find((r) => r.id === item.rock_id) : undefined;
   return (
     <div>
@@ -187,7 +197,10 @@ function IdsRow({
             ref={autoResize}
             defaultValue={boardTitle(item.issue)}
             rows={1}
-            onInput={(e) => autoResize(e.currentTarget)}
+            onInput={(e) => {
+              autoResize(e.currentTarget);
+              setDraftTitle(e.currentTarget.value);
+            }}
             onBlur={(e) => {
               const v = e.target.value.trim();
               if (v && v !== boardTitle(item.issue)) startTransition(() => updateIdsItem(item.id, { issue: v }));
@@ -195,6 +208,7 @@ function IdsRow({
             className="min-w-0 resize-none overflow-hidden whitespace-pre-wrap break-words rounded-md border border-transparent bg-transparent px-2 py-1 text-sm leading-snug text-text hover:border-border focus:border-accent/50 focus:outline-none"
             placeholder="Issue…"
           />
+          <NamingHint title={draftTitle} />
           {item.carried_from_week != null && (
             <span className="px-2">
               <CarryoverBadge fromWeek={item.carried_from_week} />

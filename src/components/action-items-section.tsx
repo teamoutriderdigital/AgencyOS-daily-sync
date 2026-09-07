@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { boardToday, deadlineLabel } from "@/lib/subprojects";
+import { namingHint } from "@/lib/board-naming";
 import { cn } from "@/lib/utils";
 import { L10_PRIORITIES, getPriorityClasses, type ActionItem } from "@/lib/l10";
 import { OWNERS } from "@/lib/team";
@@ -112,6 +113,7 @@ export function ActionItemsSection({ items }: { items: ActionItem[] }) {
 
 function ActionRow({ item }: { item: ActionItem }) {
   const [, startTransition] = useTransition();
+  const [draftTitle, setDraftTitle] = useState(item.item);
   return (
     <div className="flex items-start gap-3 px-5 py-2.5">
       <button
@@ -129,6 +131,7 @@ function ActionRow({ item }: { item: ActionItem }) {
         <input
           type="text"
           defaultValue={item.item}
+          onChange={(e) => setDraftTitle(e.target.value)}
           onBlur={(e) => {
             const v = e.target.value.trim();
             if (v && v !== item.item) startTransition(() => updateActionItem(item.id, { item: v }));
@@ -138,6 +141,9 @@ function ActionRow({ item }: { item: ActionItem }) {
             item.done ? "text-text-muted line-through" : "text-text"
           )}
         />
+        {namingHint(draftTitle) && (
+          <p className="px-2 text-xs text-amber-700">{namingHint(draftTitle)}</p>
+        )}
         {item.carried_from_week != null && (
           <span className="px-2">
             <CarryoverBadge fromWeek={item.carried_from_week} />

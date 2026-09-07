@@ -66,6 +66,8 @@ shipped.
 
 | Rule | Enforced by |
 |---|---|
+| 1, 2, 3, 5, 7 — anything typed | `titleProblems` in `src/lib/board-naming.ts`. A hint appears beside the title on IDS rows and to-dos as it is written — a progress ratio, a percentage, a bare ISO date, a reference stranded mid-sentence, or a title too long to read out. It never blocks saving: the board belongs to the person typing. |
+| Everything already on the board | `npm run audit:naming` checks every open IDS topic, to-do and rock title, and also names the ones that only read well because `board-language.ts` renames them. Read-only — renaming is the owner's call. |
 | 1, 2 — legacy titles | `src/lib/board-language.ts`, a reviewed display name per old title. The original text is preserved in the record; editing a title on the board saves the human's words. |
 | 3, 4, 5, 6, 7 — generated lines | `buildClientCard`, `firstNames`, `whenPhrase` in `src/lib/subprojects.ts`, covered by `tests/subprojects.test.cjs`. |
 | Subproject names | `subprojectName` in `src/lib/subprojects.ts`. Plane's delivery modules collapse into names the room uses — Design, Development, Go Live and Website Recovery all read as **Website**; Content Production and Content Publishing read as **SEO and content**. Anything unrecognised is kept verbatim rather than guessed at. |
@@ -78,4 +80,14 @@ an ID in the middle, or a silent gap, it isn't ready.
 
 If a title is already live and wrong, fix it in place on the board — the board
 saves what you type. `board-language.ts` is only for the legacy backlog of
-AI-written titles, and it should shrink over time, not grow.
+AI-written titles, and it should shrink over time, not grow: every entry in it is
+a title nobody has fixed at the source yet, which is why `npm run audit:naming`
+lists them separately rather than counting them as clean.
+
+## What the checks deliberately do not do
+
+They do not judge whether a title names a job. No regular expression can tell
+"Create the employee offboarding checklist" from "Offboarding" — rule 1 is a
+thinking rule, and the checks only catch its most common symptom, a counter
+smuggled into the name. Nothing is blocked, nothing is auto-rewritten, and no
+title is ever changed without a person typing it.
