@@ -99,5 +99,7 @@ migration `027_plane_subprojects.sql` applied. A client Plane cannot be read for
 is reported as a warning on the board rather than silently losing its rows, and
 a push that reads nothing at all leaves the previous snapshot in place.
 
-See [L10 board refresh](docs/l10-board-refresh.md) for selection rules, refresh
-frequency, source cleanup and release requirements.
+How every line on the board is worded — titles, owners, dates, and how gaps are
+stated — is written down in [How things are named on the board](docs/board-naming.md).
+See [L10 board refresh](docs/l10-board-refresh.md) for selection rules, source
+cleanup and release requirements.
