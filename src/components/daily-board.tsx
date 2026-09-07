@@ -14,7 +14,6 @@ import { ActionItemsSection } from "./action-items-section";
 import { ReviewSection } from "./review-section";
 import { DateHeader } from "./date-header";
 import { CheckinSection } from "./checkin-section";
-import { SubprojectsSection } from "./subprojects-section";
 import { HeadlinesSection } from "./headlines-section";
 import { SalesSection } from "./sales-section";
 import { OpsSection } from "./ops-section";
@@ -256,20 +255,14 @@ export function DailyBoard({ initialSnapshot, today, knownClients }: Props) {
   const sections: Record<(typeof AGENDA_ORDER)[number], React.ReactNode> = {
     checkin: <CheckinSection key="checkin" checkins={checkins} date={date} />,
     headlines: (
-      <div key="client-work" className="space-y-4">
-        {date === today && <SubprojectsSection />}
-        <details open={date !== today}>
-          <summary className="mb-3 cursor-pointer text-sm text-text-muted">Daily meeting notes and task checklist</summary>
-          <HeadlinesSection
-            key="headlines"
-            headlines={headlines}
-            tasks={headlineTasks}
-            date={date}
-            currentMember={currentMember}
-            clients={clientOptions}
-          />
-        </details>
-      </div>
+      <HeadlinesSection
+        key="headlines"
+        headlines={headlines}
+        tasks={headlineTasks}
+        date={date}
+        currentMember={currentMember}
+        clients={clientOptions}
+      />
     ),
     review: (
       <ReviewSection key="review" items={reviewItems} date={date} currentMember={currentMember} />

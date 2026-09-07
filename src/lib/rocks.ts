@@ -4,8 +4,10 @@ export type Rock = Tables<"rocks">;
 export type RockKv = Tables<"rock_meeting_kv">;
 
 // The rocks roster is wider than the daily team_member enum (adds Darko), so
-// rock owners are free text drawn from this list.
-export const ROCK_OWNERS = ["Jack", "Daniel", "Darko", "Leo", "Rehan", "Kas", "Rasika"];
+// rock owners are free text drawn from this list. Leo has left but stays here
+// until his four orphaned rocks are reassigned or killed — dropping him first
+// would hide them from the tracker's owner grouping.
+export const ROCK_OWNERS = ["Jack", "Daniel", "Darko", "Leo", "Rehan", "Kas", "Rasika", "Mubshar"];
 
 export const ROCK_TYPES: RockType[] = ["company", "individual"];
 

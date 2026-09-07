@@ -3,14 +3,44 @@
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import type { ActionItem } from "@/lib/l10";
+import type { DailyHeadline, HeadlineTask } from "@/lib/daily";
+import type { TeamMember } from "@/lib/database.types";
+import { OWNERS } from "@/lib/team";
 import { ActionItemsSection } from "./action-items-section";
 import { TodoSummary } from "./todo-summary";
 import { DailySyncLauncher } from "./daily-sync-launcher";
-import { SubprojectsSection } from "./subprojects-section";
+import { HeadlinesSection } from "./headlines-section";
 
-export function DashboardBoard({ initialItems, today }: { initialItems: ActionItem[]; today: string }) {
+const MEMBER_KEY = "daily-sync:member";
+
+// To-dos dashboard + today's client headlines. Live summary across the team
+// plus the full add/manage list (same ActionItemsSection used on the daily
+// board) and today's headlines (same HeadlinesSection). Subscribes to
+// action_items and today's daily_headlines so both stay in realtime.
+export function DashboardBoard({
+  initialItems,
+  initialHeadlines,
+  initialHeadlineTasks,
+  knownClients,
+  today
+}: {
+  initialItems: ActionItem[];
+  initialHeadlines: DailyHeadline[];
+  initialHeadlineTasks: HeadlineTask[];
+  knownClients: string[];
+  today: string;
+}) {
   const supabase = useMemo(() => createClient(), []);
   const [items, setItems] = useState<ActionItem[]>(initialItems);
+  const [headlines, setHeadlines] = useState<DailyHeadline[]>(initialHeadlines);
+  const [headlineTasks, setHeadlineTasks] = useState<HeadlineTask[]>(initialHeadlineTasks);
+  const [member, setMember] = useState<TeamMember | null>(null);
+
+  // "Who am I" for headline authorship (shared with the daily board's selector).
+  useEffect(() => {
+    const saved = window.localStorage.getItem(MEMBER_KEY);
+    if (saved && (OWNERS as string[]).includes(saved)) setMember(saved as TeamMember);
+  }, []);
 
   // Live to-dos.
   useEffect(() => {
@@ -37,18 +67,83 @@ export function DashboardBoard({ initialItems, today }: { initialItems: ActionIt
     };
   }, [supabase]);
 
+  // Live today's headlines.
+  useEffect(() => {
+    const channel = supabase
+      .channel("dashboard:daily_headlines")
+      .on("postgres_changes", { event: "*", schema: "public", table: "daily_headlines" }, (payload) => {
+        if (payload.eventType === "DELETE") {
+          const oldId = (payload.old as { id: number }).id;
+          setHeadlines((prev) => prev.filter((h) => h.id !== oldId));
+          return;
+        }
+        const row = payload.new as DailyHeadline;
+        if (row.headline_date !== today) return;
+        setHeadlines((prev) => {
+          const idx = prev.findIndex((h) => h.id === row.id);
+          if (idx === -1) return [...prev, row];
+          const copy = [...prev];
+          copy[idx] = row;
+          return copy;
+        });
+      })
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [supabase, today]);
+
+  // Live today's headline tasks.
+  useEffect(() => {
+    const channel = supabase
+      .channel("dashboard:headline_tasks")
+      .on("postgres_changes", { event: "*", schema: "public", table: "headline_tasks" }, (payload) => {
+        if (payload.eventType === "DELETE") {
+          const oldId = (payload.old as { id: number }).id;
+          setHeadlineTasks((prev) => prev.filter((t) => t.id !== oldId));
+          return;
+        }
+        const row = payload.new as HeadlineTask;
+        if (row.headline_date !== today) return;
+        setHeadlineTasks((prev) => {
+          const idx = prev.findIndex((t) => t.id === row.id);
+          if (idx === -1) return [...prev, row];
+          const copy = [...prev];
+          copy[idx] = row;
+          return copy;
+        });
+      })
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [supabase, today]);
+
+  const clientOptions = useMemo(() => {
+    const set = new Set<string>(knownClients);
+    for (const h of headlines) if (h.client) set.add(h.client);
+    return [...set];
+  }, [knownClients, headlines]);
+
   return (
     <div className="mx-auto max-w-7xl space-y-6 px-4 py-8">
       <div>
         <h1 className="font-display text-2xl font-semibold tracking-tight text-text">Dashboard</h1>
         <p className="mt-1 text-sm text-text-muted">
-          Current client work from Plane and the team&apos;s meeting commitments.
+          Overview of the team&apos;s work. Start a daily sync, post client headlines, or manage
+          to-dos.
         </p>
       </div>
 
       <DailySyncLauncher today={today} />
 
-      <SubprojectsSection />
+      <HeadlinesSection
+        headlines={headlines}
+        tasks={headlineTasks}
+        date={today}
+        currentMember={member}
+        clients={clientOptions}
+      />
 
       <div className="space-y-4">
         <h2 className="font-display text-lg font-semibold tracking-tight text-text">To-dos</h2>

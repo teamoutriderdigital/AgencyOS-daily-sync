@@ -8,8 +8,8 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "push:subprojects": "node scripts/push-subprojects.cjs",
-    "test": "node --test tests/"
+    "test": "node --test tests/",
+    "push:client-work": "node scripts/push-client-work.cjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.112.3",

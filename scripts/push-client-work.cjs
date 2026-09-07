@@ -1,13 +1,22 @@
 #!/usr/bin/env node
-// Push the "Client work" snapshot into Supabase.
+// Push the day's client work onto the board.
 //
-// Reads Plane with the key in .env.local, groups the active work into one row
-// per subproject, and replaces the `plane_subprojects` table. The deployment
-// never talks to Plane — it only reads what this script leaves behind — so the
-// Plane API key stays on trusted machines and off Vercel.
+// Reads Plane with the key in .env.local, groups each client's active work by
+// subproject, and writes two things:
 //
-//   npm run push:subprojects            # push
-//   npm run push:subprojects -- --dry   # print what would be pushed
+//   1. the `plane_subprojects` snapshot (per-subproject counts), and
+//   2. the client cards the meeting actually reads — one card per client with a
+//      plain-English headline and a tick list of action items, in the same
+//      `daily_headlines` / `headline_tasks` shape every previous daily sync and
+//      L10 has used, so the room can tick them off live.
+//
+// The deployment never talks to Plane — it only reads what this script leaves
+// behind — so the Plane API key stays on trusted machines and off Vercel.
+//
+//   npm run push:client-work                     # snapshot + today's cards
+//   npm run push:client-work -- --dry            # print, write nothing
+//   npm run push:client-work -- --date=2026-09-08
+//   npm run push:client-work -- --replace        # rewrite a day already seeded
 //
 // Safe to re-run: it upserts by the stable "<project id>:<subproject>" key and
 // deletes rows that no longer exist. A partial Plane failure is recorded as a
@@ -21,6 +30,8 @@ const Module = require('node:module');
 
 const ROOT = path.resolve(__dirname, '..');
 const DRY = process.argv.includes('--dry');
+const REPLACE = process.argv.includes('--replace');
+const DATE = (process.argv.find(a => a.startsWith('--date=')) || '').slice(7);
 
 // The board's own grouping rules, compiled from source so this script and the
 // page can never disagree about what a subproject is. tests/subprojects.test.cjs
@@ -30,7 +41,12 @@ const compiled = ts.transpileModule(fs.readFileSync(path.join(ROOT, 'src/lib/sub
 }).outputText;
 const mod = new Module('subprojects');
 mod._compile(compiled, 'subprojects.cjs');
-const { buildSubprojectRows, rowToDb, boardToday, CLIENT_PROJECTS, PLANE_WORKSPACE } = mod.exports;
+const { buildSubprojectRows, buildClientCard, rowToDb, boardToday, CLIENT_PROJECTS, PLANE_WORKSPACE } = mod.exports;
+
+// daily_headlines.owner / headline_tasks.owner are the team_member enum, so a
+// client owned by someone outside it (Leo, Darko) is left unowned on purpose —
+// that gap is the decision the meeting owes, not something to paper over.
+const TEAM = ['Jack', 'Daniel', 'Leonardo', 'Rehan', 'Kas', 'Rasika', 'Mubshar', 'Lianna'];
 
 function env() {
   const file = path.join(ROOT, '.env.local');
@@ -95,21 +111,27 @@ function supabase(table, { method = 'GET', query = '', body } = {}) {
 }
 
 async function main() {
-  const today = boardToday();
+  const today = DATE || boardToday();
+  // "closed since the last meeting" counts from the previous board day, so the
+  // wins on a card are the ones the room has not already heard.
+  const priorDays = await supabase('daily_headlines', { query: `select=headline_date&headline_date=lt.${today}&order=headline_date.desc&limit=1` });
+  const lastMeeting = priorDays[0]?.headline_date ?? today;
   const warnings = [];
   const [clients, projects, people] = await Promise.all([
-    supabase('clients', { query: 'select=name,stage&order=sort_order' }),
+    supabase('clients', { query: 'select=name,stage,owner&order=sort_order' }),
     plane('/projects/'),
     plane('/members/')
   ]);
   if (!clients.length) throw new Error('The clients table came back empty — refusing to publish an empty board.');
 
   const rows = [];
+  const cards = [];
   for (const client of clients.filter(c => c.stage !== 'Churned')) {
     const identifier = CLIENT_PROJECTS[client.name];
     const project = projects.find(p => p.identifier === identifier);
     if (!project) {
       warnings.push(`${client.name}: no linked Plane project.`);
+      cards.push({ ...buildClientCard(client.name, [], today, { hasPlaneProject: false }), owner: client.owner });
       continue;
     }
     try {
@@ -118,8 +140,23 @@ async function main() {
         fields: 'id,name,sequence_id,parent,state,assignees,min_module_name,target_date,updated_at,archived_at,completed_at,is_draft'
       });
       const states = await plane(`/projects/${project.id}/states/`);
-      rows.push(...buildSubprojectRows(client.name, project, items, states, people, today));
-      process.stdout.write(`  ${client.name}: ${rows.length} rows so far\n`);
+      const clientRows = buildSubprojectRows(client.name, project, items, states, people, today);
+      rows.push(...clientRows);
+      // Context the counts alone can't carry: what shipped, and how long the
+      // open work has been sitting untouched.
+      const stateById = new Map(states.map(state => [state.id, state]));
+      const groupOf = item => (typeof item.state === 'string' ? stateById.get(item.state) : item.state)?.group;
+      const live = items.filter(item => !item.archived_at && !item.is_draft);
+      const closedSinceLastMeeting = live.filter(item =>
+        groupOf(item) === 'completed' && (item.completed_at || item.updated_at || '').slice(0, 10) >= lastMeeting).length;
+      const touches = live.filter(item => ['started', 'unstarted'].includes(groupOf(item))).map(item => (item.updated_at || '').slice(0, 10)).filter(Boolean);
+      cards.push({
+        ...buildClientCard(client.name, clientRows, today, {
+          closedSinceLastMeeting, lastTouch: touches.length ? touches.sort().at(-1) : null
+        }),
+        owner: client.owner
+      });
+      process.stdout.write(`  ${client.name}: ${clientRows.length} subproject rows\n`);
     } catch (cause) {
       warnings.push(`${client.name}: could not be read from Plane on the last push.`);
       process.stdout.write(`  ${client.name}: FAILED — ${cause.message}\n`);
@@ -131,6 +168,12 @@ async function main() {
   console.log(`\n${payload.length} subproject rows${warnings.length ? `, ${warnings.length} warning(s)` : ''} at ${fetchedAt}`);
   for (const row of payload) console.log(`  ${row.client} · ${row.subproject} — ${row.reference} ${row.task.slice(0, 54)} [${row.owner}] ${row.due_date ?? 'no date'}`);
   for (const warning of warnings) console.log(`  ! ${warning}`);
+  console.log(`\nClient cards for ${today} (wins counted since ${lastMeeting}):`);
+  for (const card of cards) {
+    console.log(`\n  ${card.client}${card.owner ? ` — ${card.owner}` : ' — no owner'}`);
+    console.log(`    ${card.headline}`);
+    for (const task of card.tasks) console.log(`      [ ] ${task}`);
+  }
   if (DRY) return console.log('\ndry run — nothing written. Drop --dry to push.');
 
   // Every client failing means Plane is unreachable, not that the work is gone.
@@ -144,7 +187,33 @@ async function main() {
     method: 'PATCH', query: 'id=eq.1',
     body: { fetched_at: fetchedAt, warnings, pushed_by: 'push-subprojects' }
   });
-  console.log('\npushed — open /dashboard or /weekly, the boards update live.');
+  // Cards are the meeting's working surface: never overwrite a day the team has
+  // already been ticking unless asked to.
+  const existing = await supabase('daily_headlines', { query: `select=id&headline_date=eq.${today}` });
+  if (existing.length && !REPLACE) {
+    console.log(`\nsnapshot pushed. ${today} already has ${existing.length} client cards — left alone. Pass --replace to rewrite them.`);
+    return;
+  }
+  if (existing.length) {
+    await supabase('headline_tasks', { method: 'DELETE', query: `headline_date=eq.${today}` });
+    await supabase('daily_headlines', { method: 'DELETE', query: `headline_date=eq.${today}` });
+  }
+  for (const card of cards) {
+    const owner = TEAM.includes(card.owner) ? card.owner : null;
+    const [headline] = await request(`${need('NEXT_PUBLIC_SUPABASE_URL')}/rest/v1/daily_headlines`, {
+      method: 'POST',
+      headers: {
+        apikey: need('NEXT_PUBLIC_SUPABASE_ANON_KEY'), Authorization: `Bearer ${need('NEXT_PUBLIC_SUPABASE_ANON_KEY')}`,
+        'Content-Type': 'application/json', Prefer: 'return=representation'
+      },
+      body: JSON.stringify({ headline_date: today, client: card.client, text: card.headline, created_by: 'Daniel', owner })
+    });
+    await supabase('headline_tasks', {
+      method: 'POST',
+      body: card.tasks.map((text, sort_order) => ({ headline_id: headline.id, headline_date: today, text, owner, sort_order }))
+    });
+  }
+  console.log(`\npushed — ${cards.length} client cards and ${cards.reduce((n, c) => n + c.tasks.length, 0)} action items for ${today}. Open /dashboard or /weekly.`);
 }
 
 main().catch(error => {
