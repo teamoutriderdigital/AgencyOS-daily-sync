@@ -72,8 +72,25 @@ doesn't exist here). Instead:
 
 ## Current L10 client work
 
-The current Weekly L10, Dashboard and today’s Daily Sync show compact subproject
-rows read from Plane. Set the server-only `PLANE_API_KEY` and `SITE_PASSWORD` on
-the correct deployment. Use Node 22 with the currently installed Supabase client.
+The Weekly L10, Dashboard and today’s Daily Sync show compact **Client work**
+rows — one per client subproject, with the oldest overdue task (or else the
+latest active one), its owner and its deadline.
+
+**The deployment never talks to Plane.** The rows are computed on a machine that
+has the credentials and pushed into the `plane_subprojects` table; the site only
+reads that table. So no Plane API key belongs on Vercel — only `SITE_PASSWORD`.
+
+Refresh the snapshot before a meeting:
+
+```bash
+npm run push:subprojects -- --dry   # show what would be pushed
+npm run push:subprojects            # push it; open boards update live
+```
+
+It needs `PLANE_API_KEY` and the Supabase URL/anon key in `.env.local`, and
+migration `027_plane_subprojects.sql` applied. A client Plane cannot be read for
+is reported as a warning on the board rather than silently losing its rows, and
+a push that reads nothing at all leaves the previous snapshot in place.
+
 See [L10 board refresh](docs/l10-board-refresh.md) for selection rules, refresh
 frequency, source cleanup and release requirements.
