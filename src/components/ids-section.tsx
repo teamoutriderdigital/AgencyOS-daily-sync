@@ -1,6 +1,9 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import { retainIssueInPlane } from "@/lib/plane-retention-actions";
+import { boardTitle } from "@/lib/board-language";
+import { boardToday, deadlineLabel } from "@/lib/subprojects";
 import { cn } from "@/lib/utils";
 import {
   IDS_STATUSES,
@@ -182,12 +185,12 @@ function IdsRow({
         <div className="flex min-w-0 flex-col gap-1">
           <textarea
             ref={autoResize}
-            defaultValue={item.issue}
+            defaultValue={boardTitle(item.issue)}
             rows={1}
             onInput={(e) => autoResize(e.currentTarget)}
             onBlur={(e) => {
               const v = e.target.value.trim();
-              if (v && v !== item.issue) startTransition(() => updateIdsItem(item.id, { issue: v }));
+              if (v && v !== boardTitle(item.issue)) startTransition(() => updateIdsItem(item.id, { issue: v }));
             }}
             className="min-w-0 resize-none overflow-hidden whitespace-pre-wrap break-words rounded-md border border-transparent bg-transparent px-2 py-1 text-sm leading-snug text-text hover:border-border focus:border-accent/50 focus:outline-none"
             placeholder="Issue…"
@@ -311,6 +314,7 @@ function IdsRow({
           title="Comma-separated tags (e.g. Plan X, Internal)"
           className="min-w-0 rounded-md border border-border bg-surface px-2 py-1 text-xs text-text"
         />
+        <div className="space-y-1">
         <input
           type="date"
           defaultValue={item.due_date ?? ""}
@@ -323,6 +327,8 @@ function IdsRow({
           className="rounded-md border border-border bg-surface px-2 py-1 text-xs text-text"
           title="Due date"
         />
+          <p className="text-xs text-text-muted">{deadlineLabel(item.due_date, boardToday())}</p>
+        </div>
         <button
           type="button"
           onClick={() => {
@@ -355,6 +361,7 @@ function IdsRow({
             <IdsLongField item={item} field="discuss" label="Discuss" />
             <IdsLongField item={item} field="solve" label="Solve" />
           </div>
+          <PlaneRetention issueId={item.id} />
           {summaries.get(summaryKey("ids", item.id)) && (
             <p className="mt-3 rounded bg-surface-alt/60 px-2 py-1 text-[11px] italic text-text-muted">
               <span className="font-semibold not-italic">Last meeting: </span>
@@ -549,4 +556,25 @@ function NewIdsRow({
       </button>
     </div>
   );
+}
+
+function PlaneRetention({ issueId }: { issueId: number }) {
+  const [url, setUrl] = useState("");
+  const [error, setError] = useState("");
+  const [pending, startTransition] = useTransition();
+  return <form className="mt-4 space-y-2 border-t border-border pt-3" onSubmit={event => {
+    event.preventDefault();
+    setError("");
+    startTransition(async () => {
+      try { await retainIssueInPlane(issueId, url); }
+      catch (cause) { setError(cause instanceof Error ? cause.message : "Could not update the board."); }
+    });
+  }}>
+    <p className="text-xs text-text-muted">For old or closed work: link the matching Plane item before removing this topic from the meeting. Current blockers stay on the agenda.</p>
+    <div className="flex flex-wrap gap-2">
+      <input type="url" required aria-label="Existing Plane work item URL" placeholder="Link to the matching Plane backlog or closed item" value={url} onChange={event => setUrl(event.target.value)} className="min-w-0 flex-1 rounded border border-border px-2 py-1 text-xs" />
+      <button disabled={pending || !url.trim()} className="rounded border border-border px-3 py-1 text-xs disabled:opacity-50">{pending ? "Checking Plane…" : "Keep in Plane, remove from L10"}</button>
+    </div>
+    {error && <p role="alert" className="text-xs text-red-700">{error}</p>}
+  </form>;
 }

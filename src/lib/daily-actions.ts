@@ -156,6 +156,106 @@ export async function deleteHeadline(id: number) {
   revalidateDaily();
 }
 
+// ─── Carry forward yesterday's client headlines ──────────────────────────────
+// Client headlines are date-scoped, so a new day starts empty. This copies the
+// most recent prior day's headlines (the ones the weekly L10 edits in place)
+// onto `date`, carrying only each headline's still-open tasks — completed tasks
+// stay behind. A headline whose tasks were all done is skipped; a summary-only
+// headline (no tasks) still carries. Re-running is safe: a client+text already
+// present on `date` is not duplicated.
+
+export async function carryForwardHeadlines(date: string): Promise<{
+  carried: number;
+  fromDate: string | null;
+}> {
+  const supabase = createClient();
+
+  // Most recent day that has headlines, strictly before `date`.
+  const { data: prior, error: priorErr } = await supabase
+    .from("daily_headlines")
+    .select("headline_date")
+    .lt("headline_date", date)
+    .order("headline_date", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (priorErr) throw new Error(priorErr.message);
+  const fromDate = prior?.headline_date ?? null;
+  if (!fromDate) return { carried: 0, fromDate: null };
+
+  const [srcHeadlinesResp, srcTasksResp, todayHeadlinesResp] = await Promise.all([
+    supabase
+      .from("daily_headlines")
+      .select("*")
+      .eq("headline_date", fromDate)
+      .order("created_at", { ascending: true }),
+    supabase
+      .from("headline_tasks")
+      .select("*")
+      .eq("headline_date", fromDate)
+      .order("sort_order", { ascending: true })
+      .order("created_at", { ascending: true }),
+    supabase.from("daily_headlines").select("client, text").eq("headline_date", date)
+  ]);
+  if (srcHeadlinesResp.error) throw new Error(srcHeadlinesResp.error.message);
+  if (srcTasksResp.error) throw new Error(srcTasksResp.error.message);
+  if (todayHeadlinesResp.error) throw new Error(todayHeadlinesResp.error.message);
+
+  const srcHeadlines = srcHeadlinesResp.data ?? [];
+  const srcTasks = srcTasksResp.data ?? [];
+
+  // Dedupe key so re-clicking doesn't pile up the same headlines.
+  const existing = new Set(
+    (todayHeadlinesResp.data ?? []).map((h) => `${h.client ?? ""}|${h.text}`)
+  );
+
+  const tasksByHeadline = new Map<number, typeof srcTasks>();
+  for (const t of srcTasks) {
+    const arr = tasksByHeadline.get(t.headline_id) ?? [];
+    arr.push(t);
+    tasksByHeadline.set(t.headline_id, arr);
+  }
+
+  let carried = 0;
+  for (const h of srcHeadlines) {
+    if (existing.has(`${h.client ?? ""}|${h.text}`)) continue;
+
+    const tasks = tasksByHeadline.get(h.id) ?? [];
+    const openTasks = tasks.filter((t) => !t.done);
+    // Had tasks, but all are done — nothing open left to carry.
+    if (tasks.length > 0 && openTasks.length === 0) continue;
+
+    const { data: inserted, error: insErr } = await supabase
+      .from("daily_headlines")
+      .insert({
+        headline_date: date,
+        client: h.client,
+        text: h.text,
+        owner: h.owner,
+        created_by: h.created_by
+      })
+      .select()
+      .single();
+    if (insErr) throw new Error(insErr.message);
+
+    if (openTasks.length) {
+      const rows = openTasks.map((t, i) => ({
+        headline_id: inserted.id,
+        headline_date: date,
+        text: t.text,
+        owner: t.owner,
+        sort_order: i
+        // `done` defaults to false — carried tasks start open.
+      }));
+      const { error: taskErr } = await supabase.from("headline_tasks").insert(rows);
+      if (taskErr) throw new Error(taskErr.message);
+    }
+    carried++;
+  }
+
+  revalidateDaily();
+  return { carried, fromDate };
+}
+
 // ─── Items to review for the day ─────────────────────────────────────────────
 // Date-scoped checklist. Each item is one line of text with a "reviewed"
 // checkbox (done). Does not carry over — the list is fresh each day.

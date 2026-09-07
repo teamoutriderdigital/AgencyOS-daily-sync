@@ -58,14 +58,20 @@ export function shiftIsoWeek({ year, week }: IsoWeek, deltaWeeks: number): IsoWe
 
 // Does an item (with its stamped week/year) belong to the selected week? Legacy
 // rows with a null week are treated as "current week" so nothing disappears
-// before the first carryover sync stamps them.
+// before the first carryover sync stamps them. Still-open work from earlier
+// weeks appears in the current meeting automatically, without rewriting history.
 export function itemInWeek(
   item: { week_number: number | null; year_number: number | null },
   target: IsoWeek,
-  current: IsoWeek
+  current: IsoWeek,
+  stillOpen = false
 ): boolean {
   if (item.week_number == null || item.year_number == null) {
     return target.year === current.year && target.week === current.week;
+  }
+  if (stillOpen && target.year === current.year && target.week === current.week) {
+    return item.year_number < current.year ||
+      (item.year_number === current.year && item.week_number <= current.week);
   }
   return item.year_number === target.year && item.week_number === target.week;
 }

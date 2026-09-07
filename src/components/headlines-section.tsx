@@ -4,6 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import { cn } from "@/lib/utils";
 import {
   addHeadlineTask,
+  carryForwardHeadlines,
   createHeadline,
   deleteHeadline,
   deleteHeadlineTask,
@@ -11,6 +12,7 @@ import {
   updateHeadline,
   updateHeadlineTask
 } from "@/lib/daily-actions";
+import { formatLongDate } from "@/lib/daily";
 import type { DailyHeadline, HeadlineTask } from "@/lib/daily";
 import type { TeamMember, ClientStage } from "@/lib/database.types";
 import { clientStageClasses } from "@/lib/clients";
@@ -99,6 +101,45 @@ function OwnerSelect({
   );
 }
 
+// Pulls the most recent prior day's client headlines (and only their still-open
+// tasks) onto this day — the "carry forward from yesterday's L10" move at the
+// top of the daily. Reports what happened inline; safe to click more than once
+// (already-present headlines are skipped server-side).
+function CarryForwardButton({ date }: { date: string }) {
+  const [pending, startTransition] = useTransition();
+  const [note, setNote] = useState<string | null>(null);
+
+  const run = () => {
+    startTransition(async () => {
+      setNote(null);
+      const { carried, fromDate } = await carryForwardHeadlines(date);
+      if (!fromDate) {
+        setNote("Nothing earlier to carry forward.");
+      } else if (carried === 0) {
+        setNote(`Already up to date with ${formatLongDate(fromDate)}.`);
+      } else {
+        const day = formatLongDate(fromDate);
+        setNote(`Carried ${carried} headline${carried === 1 ? "" : "s"} from ${day}.`);
+      }
+    });
+  };
+
+  return (
+    <div className="flex items-center gap-2">
+      {note && <span className="text-xs italic text-text-muted">{note}</span>}
+      <button
+        type="button"
+        onClick={run}
+        disabled={pending}
+        className="rounded-md border border-border bg-surface px-2.5 py-1 text-xs font-medium text-text-muted hover:border-accent/50 hover:text-accent disabled:opacity-50"
+        title="Copy the most recent prior day's client headlines and their open tasks onto this day"
+      >
+        {pending ? "Carrying…" : "↩ Carry forward yesterday"}
+      </button>
+    </div>
+  );
+}
+
 // Persistent add bar — chips always on screen; saving clears and keeps it ready.
 // The text is a textarea so you can enter multiple bullet lines (each becomes a
 // task you can assign an owner to).
@@ -127,6 +168,9 @@ function AddHeadlineForm({
 
   return (
     <div className="space-y-2 border-b border-border bg-surface-alt/30 px-5 py-3">
+      <div className="flex justify-end">
+        <CarryForwardButton date={date} />
+      </div>
       <ClientChips value={client} onChange={setClient} known={clients} />
       <div className="flex items-start gap-2">
         <textarea
