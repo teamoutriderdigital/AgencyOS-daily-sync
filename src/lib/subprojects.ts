@@ -44,6 +44,42 @@ export function subprojectName(moduleName: string, client: string): string {
   return withoutClient || moduleName;
 }
 
+// ─── Storage shape ──────────────────────────────────────────────────────────
+// Rows are computed on a trusted machine and pushed into `plane_subprojects`;
+// the deployment only ever reads them. Both directions live here so the pusher
+// and the board can never drift apart.
+
+export type SubprojectDbRow = {
+  id: string; client: string; subproject: string; task: string; reference: string;
+  owner: string; status: string; due_date: string | null; task_updated_at: string | null;
+  url: string; active_count: number; overdue_count: number; missing_dates: number;
+  fetched_at?: string;
+};
+
+export function rowToDb(row: SubprojectRow, fetchedAt: string): SubprojectDbRow {
+  return {
+    id: row.id, client: row.client, subproject: row.subproject, task: row.task,
+    reference: row.reference, owner: row.owner, status: row.status, due_date: row.dueDate,
+    task_updated_at: row.updatedAt, url: row.url, active_count: row.activeCount,
+    overdue_count: row.overdueCount, missing_dates: row.missingDates, fetched_at: fetchedAt
+  };
+}
+
+export function dbToRow(row: SubprojectDbRow): SubprojectRow {
+  return {
+    id: row.id, client: row.client, subproject: row.subproject, task: row.task,
+    reference: row.reference, owner: row.owner, status: row.status, dueDate: row.due_date,
+    updatedAt: row.task_updated_at ?? "", url: row.url, activeCount: row.active_count,
+    overdueCount: row.overdue_count, missingDates: row.missing_dates
+  };
+}
+
+// Board order: client first, then subproject, so a client's rows sit together
+// however the rows came back from the database.
+export function sortRows(rows: SubprojectRow[]): SubprojectRow[] {
+  return [...rows].sort((a, b) => a.client.localeCompare(b.client) || a.subproject.localeCompare(b.subproject));
+}
+
 export function boardToday(now = new Date()): string {
   return now.toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
 }

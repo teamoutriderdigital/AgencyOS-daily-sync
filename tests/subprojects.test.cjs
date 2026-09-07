@@ -8,7 +8,7 @@ const code = ts.transpileModule(fs.readFileSync('src/lib/subprojects.ts', 'utf8'
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 }
 }).outputText;
 const mod = new Module('subprojects'); mod._compile(code, 'subprojects.cjs');
-const { buildSubprojectRows, deadlineLabel, boardToday } = mod.exports;
+const { buildSubprojectRows, deadlineLabel, boardToday, rowToDb, dbToRow, sortRows } = mod.exports;
 const project = { id: 'p', identifier: 'RED' };
 const task = (id, extra = {}) => ({ id, name: id, sequence_id: 1, parent: null, state: { id:'todo', name: 'Todo', group:'unstarted' }, assignees: [], min_module_name:'Redstone Website', target_date:null, updated_at:'2026-09-07T10:00:00Z', ...extra });
 const rows = items => buildSubprojectRows('Redstone', project, items, [], [], '2026-09-07');
@@ -46,4 +46,19 @@ test('deadline labels and board day use consistent dates at UTC midnight', () =>
 test('website phases collapse into one subproject', () => {
   const result=rows(['Design','Development','Go Live','Website Recovery'].map((name,i)=>task(String(i),{min_module_name:name})));
   assert.equal(result.length,1);assert.equal(result[0].subproject,'Website');assert.equal(result[0].activeCount,4);
+});
+
+test('a row survives the round trip through the database shape', () => {
+  const [row] = rows([task('only', { target_date: '2026-09-01' })]);
+  const stored = rowToDb(row, '2026-09-07T12:00:00.000Z');
+  assert.equal(stored.due_date, '2026-09-01');
+  assert.equal(stored.active_count, 1);
+  assert.equal(stored.fetched_at, '2026-09-07T12:00:00.000Z');
+  assert.deepEqual(dbToRow(stored), row);
+});
+
+test('rows are ordered by client then subproject, whatever order they arrive in', () => {
+  const make = (client, subproject) => ({ ...rows([task('t')])[0], id: client + subproject, client, subproject });
+  const sorted = sortRows([make('SBD', 'Website'), make('ABS', 'Website'), make('SBD', 'Google Ads')]);
+  assert.deepEqual(sorted.map(r => `${r.client}/${r.subproject}`), ['ABS/Website', 'SBD/Google Ads', 'SBD/Website']);
 });
