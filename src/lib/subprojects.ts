@@ -93,6 +93,92 @@ export function deadlineLabel(date: string | null, today: string): string {
   return formatted;
 }
 
+// ─── The client card the meeting reads ──────────────────────────────────────
+// One card per client: a plain sentence, then a tick list with one line per
+// subproject. Same shape the daily sync and L10 have always used, so the room
+// can tick items off live — the difference is the text is generated from Plane
+// instead of typed out by hand before every meeting.
+
+export type ClientCard = { client: string; headline: string; tasks: string[] };
+
+export function daysSince(dateISO: string, today: string): number {
+  return Math.round((Date.parse(`${today}T00:00:00Z`) - Date.parse(`${dateISO}T00:00:00Z`)) / 86400000);
+}
+
+function plural(n: number, word: string): string {
+  return `${n} ${word}${n === 1 ? "" : "s"}`;
+}
+
+// "54 days overdue" reads as a deadline in a sentence; deadlineLabel's
+// "12 Aug 2026 · Overdue" reads as a table cell.
+export function duePhrase(date: string | null, today: string): string {
+  if (!date) return "no deadline set";
+  if (date === today) return "due today";
+  if (date < today) return `${plural(daysSince(date, today), "day")} overdue`;
+  const when = new Date(`${date}T12:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
+  return `due ${when}`;
+}
+
+function joinList(parts: string[]): string {
+  if (parts.length <= 1) return parts[0] ?? "";
+  return `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`;
+}
+
+export function buildClientCard(
+  client: string,
+  rows: SubprojectRow[],
+  today: string,
+  context: { closedSinceLastMeeting?: number; lastTouch?: string | null; hasPlaneProject?: boolean } = {}
+): ClientCard {
+  const { closedSinceLastMeeting = 0, lastTouch = null, hasPlaneProject = true } = context;
+  if (!hasPlaneProject) {
+    return {
+      client,
+      headline: "No Plane project yet, so none of this client's work is being tracked. Decide today: staff it or park it.",
+      tasks: ["Create the Plane project and seed the intake tasks — or park the client formally"]
+    };
+  }
+  if (!rows.length) {
+    const closed = closedSinceLastMeeting ? ` ${plural(closedSinceLastMeeting, "item")} closed since the last meeting.` : "";
+    return {
+      client,
+      headline: `No active work in Plane.${closed} Anything left is backlog or already done.`,
+      tasks: ["Confirm this account is genuinely parked, or put the next piece of work in Plane"]
+    };
+  }
+
+  // Overdue first, then the busiest — the order the room should read them in.
+  const ordered = [...rows].sort((a, b) =>
+    (b.overdueCount > 0 ? 1 : 0) - (a.overdueCount > 0 ? 1 : 0) ||
+    b.overdueCount - a.overdueCount ||
+    b.activeCount - a.activeCount ||
+    a.subproject.localeCompare(b.subproject));
+  const active = ordered.reduce((n, r) => n + r.activeCount, 0);
+  const overdue = ordered.reduce((n, r) => n + r.overdueCount, 0);
+  const undated = ordered.reduce((n, r) => n + r.missingDates, 0);
+  const named = ordered.filter(r => r.subproject !== "Other active work").map(r => r.subproject);
+
+  const sentences: string[] = [];
+  sentences.push(named.length
+    ? `${joinList(named)} ${named.length === 1 ? "is the live workstream" : "are the live workstreams"}.`
+    : "None of this client's active work sits under a subproject in Plane.");
+  sentences.push(overdue
+    ? `${overdue} of ${plural(active, "open item")} ${overdue === 1 ? "is" : "are"} overdue.`
+    : `${plural(active, "open item")}, none overdue.`);
+  if (undated) sentences.push(`${plural(undated, "item")} ${undated === 1 ? "carries" : "carry"} no deadline at all.`);
+  if (lastTouch && daysSince(lastTouch, today) >= 7) sentences.push(`Nothing has been touched in ${plural(daysSince(lastTouch, today), "day")}.`);
+  if (closedSinceLastMeeting) sentences.push(`${plural(closedSinceLastMeeting, "item")} closed since the last meeting.`);
+
+  const tasks = ordered.map(row => {
+    const who = row.owner === "Unassigned" ? "nobody assigned" : row.owner;
+    const tail = row.missingDates ? `; ${plural(row.missingDates, "other task")} here with no deadline` : "";
+    return row.subproject === "Other active work"
+      ? `Unfiled work — "${row.task}" (${row.reference}), ${who}, ${duePhrase(row.dueDate, today)}. ${plural(row.activeCount, "task")} sit outside any subproject in Plane${tail ? tail.replace("; ", " — ") : ""}`
+      : `${row.subproject} — "${row.task}" (${row.reference}), ${who}, ${duePhrase(row.dueDate, today)}${tail}`;
+  });
+  return { client, headline: sentences.join(" "), tasks };
+}
+
 export function buildSubprojectRows(
   client: string, project: { id: string; identifier: string }, items: PlaneWorkItem[],
   states: PlaneState[], people: PlanePerson[], today: string

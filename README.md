@@ -83,9 +83,16 @@ reads that table. So no Plane API key belongs on Vercel — only `SITE_PASSWORD`
 Refresh the snapshot before a meeting:
 
 ```bash
-npm run push:subprojects -- --dry   # show what would be pushed
-npm run push:subprojects            # push it; open boards update live
+npm run push:client-work -- --dry   # show what would be pushed
+npm run push:client-work            # push it; open boards update live
+npm run push:client-work -- --replace   # rewrite a day already seeded
 ```
+
+It writes two things: the `plane_subprojects` snapshot, and the **client cards**
+the meeting reads — one card per client with a plain-English headline and a tick
+list of action items, in the same `daily_headlines` / `headline_tasks` shape
+every previous daily sync and L10 has used. A day that already has cards is left
+alone unless `--replace` is passed, so a push can never wipe ticks mid-meeting.
 
 It needs `PLANE_API_KEY` and the Supabase URL/anon key in `.env.local`, and
 migration `027_plane_subprojects.sql` applied. A client Plane cannot be read for

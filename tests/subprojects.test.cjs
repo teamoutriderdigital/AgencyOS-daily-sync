@@ -8,7 +8,7 @@ const code = ts.transpileModule(fs.readFileSync('src/lib/subprojects.ts', 'utf8'
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 }
 }).outputText;
 const mod = new Module('subprojects'); mod._compile(code, 'subprojects.cjs');
-const { buildSubprojectRows, deadlineLabel, boardToday, rowToDb, dbToRow, sortRows } = mod.exports;
+const { buildSubprojectRows, deadlineLabel, boardToday, rowToDb, dbToRow, sortRows, buildClientCard, duePhrase } = mod.exports;
 const project = { id: 'p', identifier: 'RED' };
 const task = (id, extra = {}) => ({ id, name: id, sequence_id: 1, parent: null, state: { id:'todo', name: 'Todo', group:'unstarted' }, assignees: [], min_module_name:'Redstone Website', target_date:null, updated_at:'2026-09-07T10:00:00Z', ...extra });
 const rows = items => buildSubprojectRows('Redstone', project, items, [], [], '2026-09-07');
@@ -61,4 +61,50 @@ test('rows are ordered by client then subproject, whatever order they arrive in'
   const make = (client, subproject) => ({ ...rows([task('t')])[0], id: client + subproject, client, subproject });
   const sorted = sortRows([make('SBD', 'Website'), make('ABS', 'Website'), make('SBD', 'Google Ads')]);
   assert.deepEqual(sorted.map(r => `${r.client}/${r.subproject}`), ['ABS/Website', 'SBD/Google Ads', 'SBD/Website']);
+});
+
+// ─── the client card the meeting reads ──────────────────────────────────────
+
+const row = (over = {}) => ({
+  id: 'x', client: 'SBD', subproject: 'Website', task: 'Fix the banner', reference: 'SBD-301',
+  owner: 'Rehan Saleem', status: 'In Progress', dueDate: null, updatedAt: '2026-09-06T10:00:00Z',
+  url: 'https://app.plane.so/x', activeCount: 1, overdueCount: 0, missingDates: 0, ...over
+});
+
+test('a card reads as sentences, and overdue work leads the tick list', () => {
+  const card = buildClientCard('SBD', [
+    row({ subproject: 'Website' }),
+    row({ subproject: 'Google Ads', dueDate: '2026-08-15', overdueCount: 2, activeCount: 3, reference: 'SBD-304', task: 'Shift ad weighting' })
+  ], '2026-09-07');
+  assert.match(card.headline, /Google Ads and Website are the live workstreams\./);
+  assert.match(card.headline, /2 of 4 open items are overdue\./);
+  assert.equal(card.tasks[0], 'Google Ads — "Shift ad weighting" (SBD-304), Rehan Saleem, 23 days overdue');
+  assert.equal(card.tasks[1], 'Website — "Fix the banner" (SBD-301), Rehan Saleem, no deadline set');
+});
+
+test('unassigned, undated and unfiled work is named plainly, never hidden', () => {
+  const card = buildClientCard('SBD', [
+    row({ subproject: 'Other active work', owner: 'Unassigned', activeCount: 4, missingDates: 3, task: 'Post 2 GBP', reference: 'SBD-287', dueDate: '2026-09-06' })
+  ], '2026-09-07');
+  assert.match(card.tasks[0], /^Unfiled work — "Post 2 GBP" \(SBD-287\), nobody assigned, 1 day overdue\./);
+  assert.match(card.tasks[0], /4 tasks sit outside any subproject in Plane/);
+  assert.match(card.headline, /3 items carry no deadline at all\./);
+});
+
+test('silence and wins both make the headline; a missing project stops the card', () => {
+  const quiet = buildClientCard('Theraplay', [row({ dueDate: '2026-09-01', overdueCount: 1 })], '2026-09-07',
+    { lastTouch: '2026-08-07', closedSinceLastMeeting: 2 });
+  assert.match(quiet.headline, /Nothing has been touched in 31 days\./);
+  assert.match(quiet.headline, /2 items closed since the last meeting\./);
+  const none = buildClientCard('Key Healthcare', [], '2026-09-07', { hasPlaneProject: false });
+  assert.match(none.headline, /No Plane project yet/);
+  assert.equal(none.tasks.length, 1);
+});
+
+test('due phrasing stays readable at the edges', () => {
+  assert.equal(duePhrase(null, '2026-09-07'), 'no deadline set');
+  assert.equal(duePhrase('2026-09-07', '2026-09-07'), 'due today');
+  assert.equal(duePhrase('2026-09-06', '2026-09-07'), '1 day overdue');
+  // "Sep" or "Sept" depending on the ICU build — either reads fine in a sentence.
+  assert.match(duePhrase('2026-09-12', '2026-09-07'), /^due 12 Sept?$/);
 });

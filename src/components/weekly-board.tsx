@@ -6,6 +6,7 @@ import type { ActionItem, IdsItem } from "@/lib/l10";
 import { todayLocalISO } from "@/lib/l10";
 import type { Rock } from "@/lib/rocks";
 import { QUARTER } from "@/lib/rocks";
+import type { Client } from "@/lib/clients";
 import type { MeetingRating } from "@/lib/daily";
 import type { WeeklySnapshot } from "@/lib/weekly-server";
 import {
@@ -28,7 +29,7 @@ import { RocksTrackerSection } from "./rocks-tracker-section";
 import { RatingSection } from "./rating-section";
 import { CompletedSection } from "./completed-section";
 import { InnovationSection } from "./innovation-section";
-import { SubprojectsSection } from "./subprojects-section";
+import { HeadlinesSection } from "./headlines-section";
 import { NextWeekSection } from "./next-week-section";
 
 type Props = { initialSnapshot: WeeklySnapshot };
@@ -44,6 +45,7 @@ export function WeeklyBoard({ initialSnapshot }: Props) {
   const [actionItems, setActionItems] = useState<ActionItem[]>(initialSnapshot.actionItems);
   const [idsItems, setIdsItems] = useState<IdsItem[]>(initialSnapshot.idsItems);
   const [rocks, setRocks] = useState<Rock[]>(initialSnapshot.rocks);
+  const [clients, setClients] = useState<Client[]>(initialSnapshot.clients);
   const [ratings, setRatings] = useState<MeetingRating[]>(initialSnapshot.ratings);
   const [innovations, setInnovations] = useState<Innovation[]>(initialSnapshot.innovations);
   const [summaries, setSummaries] = useState<ItemSummary[]>(initialSnapshot.summaries);
@@ -124,6 +126,25 @@ export function WeeklyBoard({ initialSnapshot }: Props) {
       })
       .subscribe();
 
+    const clientsChannel = supabase
+      .channel("weekly:clients")
+      .on("postgres_changes", { event: "*", schema: "public", table: "clients" }, (payload) => {
+        if (payload.eventType === "DELETE") {
+          const oldId = (payload.old as { id: number }).id;
+          setClients((prev) => prev.filter((c) => c.id !== oldId));
+          return;
+        }
+        const row = payload.new as Client;
+        setClients((prev) => {
+          const idx = prev.findIndex((c) => c.id === row.id);
+          const next = idx === -1 ? [...prev, row] : prev.map((c) => (c.id === row.id ? row : c));
+          // Keep the same (sort_order, name) order the server snapshot uses, so
+          // a newly-inserted client lands in the right spot without a reload.
+          return next.sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name));
+        });
+      })
+      .subscribe();
+
     const innovationsChannel = supabase
       .channel("weekly:innovations")
       .on("postgres_changes", { event: "*", schema: "public", table: "innovations" }, (payload) => {
@@ -168,6 +189,7 @@ export function WeeklyBoard({ initialSnapshot }: Props) {
       supabase.removeChannel(actionChannel);
       supabase.removeChannel(idsChannel);
       supabase.removeChannel(rocksChannel);
+      supabase.removeChannel(clientsChannel);
       supabase.removeChannel(innovationsChannel);
       supabase.removeChannel(salesChannel);
     };
@@ -251,6 +273,11 @@ export function WeeklyBoard({ initialSnapshot }: Props) {
   }, [supabase, selected]);
 
   const summaryIndex = useMemo(() => indexSummaries(summaries), [summaries]);
+  const clientNames = useMemo(() => clients.map((c) => c.name), [clients]);
+  const clientStages = useMemo(
+    () => Object.fromEntries(clients.map((c) => [c.name, c.stage])),
+    [clients]
+  );
   const weekActions = useMemo(
     () => actionItems.filter((i) => itemInWeek(i, selected, current, !i.done)),
     [actionItems, selected, current]
@@ -331,9 +358,14 @@ export function WeeklyBoard({ initialSnapshot }: Props) {
         weekStartISO={weekStartISO}
         weekEndISO={weekEndISO}
       />
-      {isCurrent ? <SubprojectsSection /> : (
-        <p className="text-sm text-text-muted">Client work shows current Plane status. Jump to this week to review it; past meeting notes remain on the Daily Sync tab.</p>
-      )}
+      <HeadlinesSection
+        headlines={initialSnapshot.dailyHeadlines}
+        tasks={initialSnapshot.headlineTasks}
+        date={initialSnapshot.headlinesDate ?? todayLocalISO()}
+        currentMember={null}
+        clients={clientNames}
+        clientStages={clientStages}
+      />
       <IdsSection items={weekIds} rocks={rocks} summaries={summaryIndex} />
       <ActionItemsSection items={weekActions} />
       {/* Same master pipeline the daily board edits, and in the same slot
