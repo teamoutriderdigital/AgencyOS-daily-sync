@@ -8,7 +8,7 @@ const code = ts.transpileModule(fs.readFileSync('src/lib/subprojects.ts', 'utf8'
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 }
 }).outputText;
 const mod = new Module('subprojects'); mod._compile(code, 'subprojects.cjs');
-const { buildSubprojectRows, deadlineLabel, boardToday, rowToDb, dbToRow, sortRows, buildClientCard, duePhrase } = mod.exports;
+const { buildSubprojectRows, deadlineLabel, boardToday, rowToDb, dbToRow, sortRows, buildClientCard, whenPhrase, firstNames } = mod.exports;
 const project = { id: 'p', identifier: 'RED' };
 const task = (id, extra = {}) => ({ id, name: id, sequence_id: 1, parent: null, state: { id:'todo', name: 'Todo', group:'unstarted' }, assignees: [], min_module_name:'Redstone Website', target_date:null, updated_at:'2026-09-07T10:00:00Z', ...extra });
 const rows = items => buildSubprojectRows('Redstone', project, items, [], [], '2026-09-07');
@@ -73,38 +73,50 @@ const row = (over = {}) => ({
 
 test('a card reads as sentences, and overdue work leads the tick list', () => {
   const card = buildClientCard('SBD', [
-    row({ subproject: 'Website' }),
+    row({ subproject: 'Website', missingDates: 1 }),
     row({ subproject: 'Google Ads', dueDate: '2026-08-15', overdueCount: 2, activeCount: 3, reference: 'SBD-304', task: 'Shift ad weighting' })
   ], '2026-09-07');
-  assert.match(card.headline, /Google Ads and Website are the live workstreams\./);
-  assert.match(card.headline, /2 of 4 open items are overdue\./);
-  assert.equal(card.tasks[0], 'Google Ads — "Shift ad weighting" (SBD-304), Rehan Saleem, 23 days overdue');
-  assert.equal(card.tasks[1], 'Website — "Fix the banner" (SBD-301), Rehan Saleem, no deadline set');
+  assert.match(card.headline, /^2 of the 4 open tasks are late, and 1 has no date at all\.$/);
+  assert.equal(card.tasks[0], 'Google Ads: Shift ad weighting — Rehan, 23 days late (SBD-304)');
+  assert.equal(card.tasks[1], 'Website: Fix the banner — Rehan, no date set (SBD-301)');
 });
 
 test('unassigned, undated and unfiled work is named plainly, never hidden', () => {
   const card = buildClientCard('SBD', [
-    row({ subproject: 'Other active work', owner: 'Unassigned', activeCount: 4, missingDates: 3, task: 'Post 2 GBP', reference: 'SBD-287', dueDate: '2026-09-06' })
+    row({ subproject: 'Other active work', owner: 'Unassigned', activeCount: 4, overdueCount: 4, missingDates: 3, task: 'Post 2 GBP', reference: 'SBD-287', dueDate: '2026-09-06' }),
+    row({ subproject: 'Website', owner: 'Unassigned', activeCount: 2, missingDates: 2, task: 'Nav polish', reference: 'SBD-9' })
   ], '2026-09-07');
-  assert.match(card.tasks[0], /^Unfiled work — "Post 2 GBP" \(SBD-287\), nobody assigned, 1 day overdue\./);
-  assert.match(card.tasks[0], /4 tasks sit outside any subproject in Plane/);
-  assert.match(card.headline, /3 items carry no deadline at all\./);
+  assert.match(card.tasks[0], /^Not in a subproject: Post 2 GBP — no one on it, 1 day late \(SBD-287\)\./);
+  // This line's task has a date, so all 3 undated others are still counted.
+  assert.match(card.tasks[0], /4 tasks here need filing, 3 more here with no date$/);
+  assert.match(card.headline, /4 of the 6 open tasks are late, and 5 have no date at all\./);
+  // This line's own task is undated, so the tail counts only the other one.
+  assert.match(card.tasks[1], /^Website: Nav polish — no one on it, no date set \(SBD-9\)\. 1 more here with no date$/);
 });
 
 test('silence and wins both make the headline; a missing project stops the card', () => {
   const quiet = buildClientCard('Theraplay', [row({ dueDate: '2026-09-01', overdueCount: 1 })], '2026-09-07',
-    { lastTouch: '2026-08-07', closedSinceLastMeeting: 2 });
-  assert.match(quiet.headline, /Nothing has been touched in 31 days\./);
-  assert.match(quiet.headline, /2 items closed since the last meeting\./);
+    { lastTouch: '2026-08-07', closedSinceLastMeeting: 2, lastMeeting: '2026-09-04' });
+  assert.match(quiet.headline, /^Nothing has moved here in 31 days\./);
+  assert.match(quiet.headline, /2 tasks finished since Friday\.$/);
   const none = buildClientCard('Key Healthcare', [], '2026-09-07', { hasPlaneProject: false });
-  assert.match(none.headline, /No Plane project yet/);
+  assert.match(none.headline, /no Plane project for this client/);
   assert.equal(none.tasks.length, 1);
 });
 
-test('due phrasing stays readable at the edges', () => {
-  assert.equal(duePhrase(null, '2026-09-07'), 'no deadline set');
-  assert.equal(duePhrase('2026-09-07', '2026-09-07'), 'due today');
-  assert.equal(duePhrase('2026-09-06', '2026-09-07'), '1 day overdue');
+test('time is said the way it would be said out loud', () => {
+  assert.equal(whenPhrase(null, '2026-09-07'), 'no date set');
+  assert.equal(whenPhrase('2026-09-07', '2026-09-07'), 'due today');
+  assert.equal(whenPhrase('2026-09-08', '2026-09-07'), 'due tomorrow');
+  assert.equal(whenPhrase('2026-09-10', '2026-09-07'), 'due Thursday');
+  assert.equal(whenPhrase('2026-09-06', '2026-09-07'), '1 day late');
   // "Sep" or "Sept" depending on the ICU build — either reads fine in a sentence.
-  assert.match(duePhrase('2026-09-12', '2026-09-07'), /^due 12 Sept?$/);
+  assert.match(whenPhrase('2026-09-21', '2026-09-07'), /^due 21 Sept?$/);
+});
+
+test('people are named the way the room names them', () => {
+  assert.equal(firstNames('Rasika Salinda'), 'Rasika');
+  assert.equal(firstNames('Mubshar Hussain, Daniel Seselovsky'), 'Mubshar and Daniel');
+  assert.equal(firstNames('A B, C D, E F'), 'A, C +1');
+  assert.equal(firstNames('Unassigned'), 'no one on it');
 });
