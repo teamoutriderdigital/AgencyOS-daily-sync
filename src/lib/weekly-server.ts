@@ -7,6 +7,7 @@ import { currentIsoWeek, isoWeekStart } from "./weekly";
 import type { Innovation } from "./innovations";
 import type { ItemSummary } from "./summaries";
 import type { SalesDeal } from "./sales";
+import type { ClientMetric } from "./client-metrics";
 
 export type WeeklySnapshot = {
   actionItems: ActionItem[];
@@ -27,6 +28,10 @@ export type WeeklySnapshot = {
   dailyHeadlines: DailyHeadline[];
   headlineTasks: HeadlineTask[];
   headlinesDate: string | null;
+  // Last full week's client numbers (organic, traffic, revenue), pushed from a
+  // trusted machine by `npm run push:client-metrics`. Newest weeks first; the
+  // board keeps only the most recent week.
+  clientMetrics: ClientMetric[];
 };
 
 // The date a week's meeting rating is stored under: that week's Monday (UTC).
@@ -46,7 +51,8 @@ function emptySnapshot(): WeeklySnapshot {
     salesDeals: [],
     dailyHeadlines: [],
     headlineTasks: [],
-    headlinesDate: null
+    headlinesDate: null,
+    clientMetrics: []
   };
 }
 
@@ -81,7 +87,8 @@ export async function getWeeklySnapshot(): Promise<WeeklySnapshot> {
       summariesResp,
       salesResp,
       headlinesResp,
-      headlineTasksResp
+      headlineTasksResp,
+      metricsResp
     ] = await Promise.all([
       supabase
         .from("action_items")
@@ -114,7 +121,15 @@ export async function getWeeklySnapshot(): Promise<WeeklySnapshot> {
         : emptyResp,
       headlinesDate
         ? supabase.from("headline_tasks").select("*").eq("headline_date", headlinesDate).order("sort_order", { ascending: true })
-        : emptyResp
+        : emptyResp,
+      // The newest week fills the table; the six weeks behind it feed each
+      // client's trend line. 13 clients x 6 weeks fits well inside the limit.
+      supabase
+        .from("client_metrics")
+        .select("*")
+        .order("week_start", { ascending: false })
+        .order("sort_order", { ascending: true })
+        .limit(200)
     ]);
     if (actionResp.error) throw new Error(actionResp.error.message);
     if (idsResp.error) throw new Error(idsResp.error.message);
@@ -130,6 +145,7 @@ export async function getWeeklySnapshot(): Promise<WeeklySnapshot> {
     if (salesResp.error) console.error("sales_deals unavailable (run migration 016?):", salesResp.error.message);
     if (headlinesResp.error) console.error("daily_headlines unavailable:", headlinesResp.error.message);
     if (headlineTasksResp.error) console.error("headline_tasks unavailable:", headlineTasksResp.error.message);
+    if (metricsResp.error) console.error("client_metrics unavailable (run migration 028?):", metricsResp.error.message);
     return {
       actionItems: actionResp.data ?? [],
       idsItems: idsResp.data ?? [],
@@ -141,7 +157,8 @@ export async function getWeeklySnapshot(): Promise<WeeklySnapshot> {
       salesDeals: salesResp.error ? [] : (salesResp.data as SalesDeal[]) ?? [],
       dailyHeadlines: headlinesResp.error ? [] : (headlinesResp.data as DailyHeadline[]) ?? [],
       headlineTasks: headlineTasksResp.error ? [] : (headlineTasksResp.data as HeadlineTask[]) ?? [],
-      headlinesDate
+      headlinesDate,
+      clientMetrics: metricsResp.error ? [] : (metricsResp.data as ClientMetric[]) ?? []
     };
   } catch (e) {
     console.error("getWeeklySnapshot failed — rendering empty board:", e);

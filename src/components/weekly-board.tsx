@@ -31,6 +31,8 @@ import { CompletedSection } from "./completed-section";
 import { InnovationSection } from "./innovation-section";
 import { HeadlinesSection } from "./headlines-section";
 import { NextWeekSection } from "./next-week-section";
+import { ClientMetricsSection } from "./client-metrics-section";
+import type { ClientMetric } from "@/lib/client-metrics";
 
 type Props = { initialSnapshot: WeeklySnapshot };
 
@@ -50,6 +52,7 @@ export function WeeklyBoard({ initialSnapshot }: Props) {
   const [innovations, setInnovations] = useState<Innovation[]>(initialSnapshot.innovations);
   const [summaries, setSummaries] = useState<ItemSummary[]>(initialSnapshot.summaries);
   const [salesDeals, setSalesDeals] = useState<SalesDeal[]>(initialSnapshot.salesDeals);
+  const [clientMetrics, setClientMetrics] = useState<ClientMetric[]>(initialSnapshot.clientMetrics);
   const [syncing, startSync] = useTransition();
 
   // A week's meeting rating is stored under that week's Monday (UTC).
@@ -185,6 +188,27 @@ export function WeeklyBoard({ initialSnapshot }: Props) {
       })
       .subscribe();
 
+    // A metrics push from the trusted machine lands on every open board
+    // without a reload, the same way the client-work snapshot does.
+    const metricsChannel = supabase
+      .channel("weekly:client_metrics")
+      .on("postgres_changes", { event: "*", schema: "public", table: "client_metrics" }, (payload) => {
+        if (payload.eventType === "DELETE") {
+          const oldId = (payload.old as { id: string }).id;
+          setClientMetrics((prev) => prev.filter((m) => m.id !== oldId));
+          return;
+        }
+        const row = payload.new as ClientMetric;
+        setClientMetrics((prev) => {
+          const idx = prev.findIndex((m) => m.id === row.id);
+          if (idx === -1) return [...prev, row];
+          const copy = [...prev];
+          copy[idx] = row;
+          return copy;
+        });
+      })
+      .subscribe();
+
     return () => {
       supabase.removeChannel(actionChannel);
       supabase.removeChannel(idsChannel);
@@ -192,6 +216,7 @@ export function WeeklyBoard({ initialSnapshot }: Props) {
       supabase.removeChannel(clientsChannel);
       supabase.removeChannel(innovationsChannel);
       supabase.removeChannel(salesChannel);
+      supabase.removeChannel(metricsChannel);
     };
   }, [supabase]);
 
@@ -366,6 +391,9 @@ export function WeeklyBoard({ initialSnapshot }: Props) {
         clients={clientNames}
         clientStages={clientStages}
       />
+      {/* Last full week's organic, traffic and revenue per client, read right
+          after the client update so the numbers sit next to the work. */}
+      <ClientMetricsSection rows={clientMetrics} clientOrder={clientNames} />
       <IdsSection items={weekIds} rocks={rocks} summaries={summaryIndex} />
       <ActionItemsSection items={weekActions} />
       {/* Same master pipeline the daily board edits, and in the same slot

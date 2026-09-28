@@ -214,6 +214,43 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["clients"]["Row"]>;
         Relationships: [];
       };
+      // Last full week's client numbers, pushed from a trusted machine
+      // (`npm run push:client-metrics`) — the deployment only reads them.
+      // Metrics are null when that source is not connected for the client.
+      client_metrics: {
+        Row: {
+          id: string;
+          client: string;
+          week_start: string;
+          week_end: string;
+          organic_clicks: number | null;
+          organic_clicks_prev: number | null;
+          impressions: number | null;
+          impressions_prev: number | null;
+          sessions: number | null;
+          sessions_prev: number | null;
+          key_events: number | null;
+          key_events_prev: number | null;
+          revenue: number | null;
+          revenue_prev: number | null;
+          organic_through: string | null;
+          traffic_through: string | null;
+          revenue_through: string | null;
+          source: string;
+          note: string | null;
+          sort_order: number;
+          fetched_at: string;
+          updated_at: string;
+        };
+        Insert: Partial<Database["public"]["Tables"]["client_metrics"]["Row"]> & {
+          id: string;
+          client: string;
+          week_start: string;
+          week_end: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["client_metrics"]["Row"]>;
+        Relationships: [];
+      };
       // Rocks meeting: keyed store for the decisions, collision resolutions,
       // exit checklist, and facilitator. text_value = written call; checked =
       // locked / done.

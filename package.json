@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "test": "node --test tests/",
     "push:client-work": "node scripts/push-client-work.cjs",
-    "audit:naming": "node scripts/audit-naming.cjs"
+    "audit:naming": "node scripts/audit-naming.cjs",
+    "push:client-metrics": "python3 scripts/push-client-metrics.py"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.112.3",

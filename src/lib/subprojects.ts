@@ -21,7 +21,7 @@ export const PLANE_HOME = `https://app.plane.so/${PLANE_WORKSPACE}/`;
 export const CLIENT_PROJECTS: Record<string, string> = {
   Redstone: 'RED', SBD: 'SBD', COD: 'COD', Vital: 'VITAL', Theraplay: 'THERA',
   'True Form Pilates': 'TFP', AOC: 'AOC', 'Supply Velocity': 'SV', 'ABS Cleaning': 'ABS',
-  Joanniefit: 'JFIT'
+  Joanniefit: 'JFIT', 'Key Healthcare': 'KEY', HostAdvice: 'HOST'
 };
 const CLIENT_NAMES: Record<string, string> = {
   SBD: 'Smith Bros Detailing', AOC: 'Art of Charm', Vital: 'Vital Electronics'
@@ -118,15 +118,16 @@ export function firstNames(owner: string): string {
   return `${names.slice(0, 2).join(", ")} +${names.length - 2}`;
 }
 
-// Time is said the way it would be said out loud: "12 days late", "due
-// Thursday". A bare date makes the reader do the arithmetic.
+// Time is said the way it would be said out loud: "was due 12 Sep", "due
+// Thursday". Past dates are stated, not counted: Plane is often behind the
+// real work, so "23 days late" reads as an accusation when the job may be done.
 export function whenPhrase(date: string | null, today: string): string {
   if (!date) return "no date set";
   const gap = daysSince(date, today);
-  if (gap > 0) return `${plural(gap, "day")} late`;
+  const when = new Date(`${date}T12:00:00Z`);
+  if (gap > 0) return `was due ${when.toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" })}`;
   if (gap === 0) return "due today";
   if (gap === -1) return "due tomorrow";
-  const when = new Date(`${date}T12:00:00Z`);
   if (gap > -7) return `due ${when.toLocaleDateString("en-GB", { weekday: "long", timeZone: "UTC" })}`;
   return `due ${when.toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" })}`;
 }
@@ -179,13 +180,12 @@ export function buildClientCard(
   const undated = ordered.reduce((n, r) => n + r.missingDates, 0);
 
   const sentences: string[] = [];
-  if (lastTouch && daysSince(lastTouch, today) >= 7) sentences.push(`Nothing has moved here in ${plural(daysSince(lastTouch, today), "day")}.`);
-  const late = overdue === active
-    ? `All ${plural(active, "open task")} ${active === 1 ? "is" : "are"} late`
-    : overdue
-      ? `${overdue} of the ${plural(active, "open task")} ${overdue === 1 ? "is" : "are"} late`
-      : `${plural(active, "open task")}, none late`;
-  sentences.push(undated ? `${late}, and ${undated} ${undated === 1 ? "has" : "have"} no date at all.` : `${late}.`);
+  if (lastTouch && daysSince(lastTouch, today) >= 7) sentences.push(`No Plane update in ${plural(daysSince(lastTouch, today), "day")}.`);
+  // Counts, not verdicts: "past their date" leaves room for work Plane has not caught up with.
+  const parts = [`${plural(active, "open task")} in Plane`];
+  if (overdue) parts.push(overdue === active ? (active === 1 ? "past its date" : "all past their date") : `${overdue} past their date`);
+  if (undated) parts.push(`${undated} with no date`);
+  sentences.push(parts.length === 3 ? `${parts[0]}, ${parts[1]} and ${parts[2]}.` : `${parts.join(", ")}.`);
   if (closed) sentences.push(closed);
 
   const tasks = ordered.map(row => {
