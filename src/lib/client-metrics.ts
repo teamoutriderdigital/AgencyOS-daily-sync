@@ -239,3 +239,22 @@ export function clientTrend(rows: ClientMetric[], client: string, maxWeeks = 6):
   const span = weeks.length;
   return `${first} The biggest move of the last ${span} weeks was ${biggest.label}, ${(biggest.pct as number) > 0 ? "up" : "down"} ${Math.abs(biggest.pct as number)}%.`;
 }
+
+// ─── Sparkline series ────────────────────────────────────────────────────────
+// The same weeks and measure the trend sentence reads (organic clicks, or
+// sessions when a client has no Search Console), oldest first, so the chart
+// and the sentence can never disagree.
+export type TrendPoint = { label: string; value: number };
+
+export function trendSeries(rows: ClientMetric[], client: string, maxWeeks = 6): { measure: string; points: TrendPoint[] } {
+  const mine = rows
+    .filter((r) => r.client === client)
+    .sort((a, b) => a.week_start.localeCompare(b.week_start));
+  const useClicks = mine.some((r) => num(r.organic_clicks) != null);
+  const key: MetricKey = useClicks ? "organic_clicks" : "sessions";
+  const points = mine
+    .filter((r) => num(r[key]) != null)
+    .slice(-maxWeeks)
+    .map((r) => ({ label: weekLabel(r.week_start, r.week_end), value: num(r[key]) as number }));
+  return { measure: useClicks ? "Organic clicks" : "Sessions", points };
+}

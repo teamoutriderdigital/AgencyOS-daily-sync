@@ -121,3 +121,13 @@ test('each client shows its newest week with numbers, and says why when that is 
   assert.equal(by.COD.behind, null);
   assert.deepEqual(latestPerClient([]), { headline: null, shown: [] });
 });
+
+const { trendSeries } = mod.exports;
+test('sparkline series is oldest first, capped at six weeks, and skips blanked weeks', () => {
+  const rows = [...six([[1, 1], [2, 1], [3, 2], [4, 3], [5, 4], [6, 5]]), wk('2026-08-03', '2026-08-09', 9, 8), wk('2026-09-21', '2026-09-27', null, null)];
+  const { measure, points } = trendSeries(rows, 'SV');
+  assert.equal(measure, 'Organic clicks');
+  assert.deepEqual(points.map((p) => p.value), [1, 2, 3, 4, 5, 6]);
+  assert.equal(points[0].label, '10–16 Aug');
+  assert.equal(trendSeries([row('KEY', { sessions: 10 })], 'KEY').measure, 'Sessions');
+});

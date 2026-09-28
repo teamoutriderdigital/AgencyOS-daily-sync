@@ -2,10 +2,12 @@
 
 import { useMemo } from "react";
 import { cn } from "@/lib/utils";
-import { Fragment } from "react";
+import { Fragment, useState } from "react";
 import {
   METRIC_COLUMNS,
   clientTrend,
+  trendSeries,
+  type TrendPoint,
   deltaLabel,
   deltaTone,
   fmtMetric,
@@ -27,6 +29,94 @@ const TONE: Record<DeltaTone, string> = {
   none: "text-text-muted",
 };
 
+// Six-week sparkline for one client. Per the chart rules: the line sits in the
+// quiet ink, the current week is the one accent-coloured point, and every
+// week has a hover target with its value, since there is no axis.
+const SPARK_W = 112;
+const SPARK_H = 32;
+const PAD = 4;
+
+function Sparkline({
+  measure,
+  points,
+}: {
+  measure: string;
+  points: TrendPoint[];
+}) {
+  const [hover, setHover] = useState<number | null>(null);
+  if (points.length < 2)
+    return <span className="text-[11px] text-text-muted">—</span>;
+  const values = points.map((p) => p.value);
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const span = max - min || 1;
+  const step = (SPARK_W - PAD * 2) / (points.length - 1);
+  const xy = points.map((p, i) => ({
+    x: PAD + i * step,
+    y: PAD + (SPARK_H - PAD * 2) * (1 - (p.value - min) / span),
+  }));
+  const path = xy
+    .map((p, i) => `${i === 0 ? "M" : "L"}${p.x.toFixed(1)},${p.y.toFixed(1)}`)
+    .join(" ");
+  const last = xy.length - 1;
+  const shown = hover ?? last;
+  const fmt = (v: number) => Math.round(v).toLocaleString("en-US");
+  return (
+    <div className="inline-flex flex-col items-start">
+      <svg
+        width={SPARK_W}
+        height={SPARK_H}
+        viewBox={`0 0 ${SPARK_W} ${SPARK_H}`}
+        role="img"
+        aria-label={`${measure}, last ${points.length} weeks: ${points.map((p) => `${p.label} ${fmt(p.value)}`).join(", ")}`}
+        onMouseLeave={() => setHover(null)}
+        className="overflow-visible"
+      >
+        <path
+          d={path}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={2}
+          strokeLinejoin="round"
+          strokeLinecap="round"
+          className="text-text-muted"
+        />
+        {hover != null && hover !== last && (
+          <circle
+            cx={xy[hover].x}
+            cy={xy[hover].y}
+            r={3}
+            className="fill-text-muted"
+          />
+        )}
+        <circle
+          cx={xy[last].x}
+          cy={xy[last].y}
+          r={3.5}
+          className="fill-accent stroke-surface"
+          strokeWidth={1.5}
+        />
+        {xy.map((p, i) => (
+          <rect
+            key={i}
+            x={p.x - step / 2}
+            y={0}
+            width={step}
+            height={SPARK_H}
+            fill="transparent"
+            onMouseEnter={() => setHover(i)}
+          >
+            <title>{`${points[i].label}: ${fmt(points[i].value)}`}</title>
+          </rect>
+        ))}
+      </svg>
+      <span className="mt-0.5 whitespace-nowrap text-[10px] text-text-muted">
+        {points[shown].label}: {fmt(points[shown].value)}
+      </span>
+    </div>
+  );
+}
+
 // Last full week's numbers per client, read-only. Rows arrive from
 // `npm run push:client-metrics` on a trusted machine; each client shows its
 // newest complete week, flagged when that is older than the headline week. Clients with nothing connected are named underneath so
@@ -44,7 +134,11 @@ export function ClientMetricsSection({
     [shown],
   );
   const week = useMemo(
-    () => orderRows(shown.map((s) => s.row), clientOrder),
+    () =>
+      orderRows(
+        shown.map((s) => s.row),
+        clientOrder,
+      ),
     [shown, clientOrder],
   );
   const { connected, notConnected } = useMemo(
@@ -55,6 +149,13 @@ export function ClientMetricsSection({
     () =>
       Object.fromEntries(
         connected.map((r) => [r.client, clientTrend(rows, r.client)]),
+      ),
+    [rows, connected],
+  );
+  const series = useMemo(
+    () =>
+      Object.fromEntries(
+        connected.map((r) => [r.client, trendSeries(rows, r.client)]),
       ),
     [rows, connected],
   );
@@ -96,10 +197,11 @@ export function ClientMetricsSection({
         </p>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[640px] text-sm">
+          <table className="w-full min-w-[760px] text-sm">
             <thead>
               <tr className="border-b border-border text-left text-[11px] uppercase tracking-wide text-text-muted">
                 <th className="px-5 py-2 font-medium">Client</th>
+                <th className="px-3 py-2 font-medium">6-week trend</th>
                 {METRIC_COLUMNS.map((c) => (
                   <th key={c.key} className="px-3 py-2 text-right font-medium">
                     {c.label}
@@ -131,6 +233,9 @@ export function ClientMetricsSection({
                             {r.note}
                           </div>
                         )}
+                      </td>
+                      <td className="px-3 py-2 align-top">
+                        <Sparkline {...series[r.client]} />
                       </td>
                       {METRIC_COLUMNS.map((c) => {
                         const now = num(r[c.key]);
@@ -169,7 +274,7 @@ export function ClientMetricsSection({
                     {trend && (
                       <tr className="border-b border-border">
                         <td
-                          colSpan={METRIC_COLUMNS.length + 1}
+                          colSpan={METRIC_COLUMNS.length + 2}
                           className="px-5 pb-3 pt-0 text-xs leading-relaxed text-text-muted"
                         >
                           {trend}
