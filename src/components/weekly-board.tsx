@@ -376,6 +376,9 @@ export function WeeklyBoard({ initialSnapshot }: Props) {
         </div>
       )}
 
+      {/* Client numbers open the meeting: last full week's organic, traffic
+          and revenue per client, before anything else is discussed. */}
+      <ClientMetricsSection rows={clientMetrics} clientOrder={clientNames} />
       <CompletedSection
         rocks={rocks}
         idsItems={idsItems}
@@ -391,9 +394,6 @@ export function WeeklyBoard({ initialSnapshot }: Props) {
         clients={clientNames}
         clientStages={clientStages}
       />
-      {/* Last full week's organic, traffic and revenue per client, read right
-          after the client update so the numbers sit next to the work. */}
-      <ClientMetricsSection rows={clientMetrics} clientOrder={clientNames} />
       <IdsSection items={weekIds} rocks={rocks} summaries={summaryIndex} />
       <ActionItemsSection items={weekActions} />
       {/* Same master pipeline the daily board edits, and in the same slot
