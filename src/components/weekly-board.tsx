@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { createClient } from "@/lib/supabase-browser";
+import { cn } from "@/lib/utils";
 import type { ActionItem, IdsItem } from "@/lib/l10";
 import { todayLocalISO } from "@/lib/l10";
 import type { Rock } from "@/lib/rocks";
@@ -376,16 +377,15 @@ export function WeeklyBoard({ initialSnapshot }: Props) {
         </div>
       )}
 
-      {/* Client numbers open the meeting: last full week's organic, traffic
-          and revenue per client, before anything else is discussed. */}
+      <MeetingRun />
+
+      <AgendaStep n={2} title="Scorecard" minutes={5} note="Read the numbers. Anything off becomes an issue, not a discussion." />
       <ClientMetricsSection rows={clientMetrics} clientOrder={clientNames} />
-      <CompletedSection
-        rocks={rocks}
-        idsItems={idsItems}
-        actionItems={actionItems}
-        weekStartISO={weekStartISO}
-        weekEndISO={weekEndISO}
-      />
+
+      <AgendaStep n={3} title="Rocks" minutes={5} note="On track or off track only. Off track goes to Issues." />
+      <RocksTrackerSection rocks={rocks} quarter={QUARTER} summaries={summaryIndex} />
+
+      <AgendaStep n={4} title="Client headlines" minutes={8} note="Where each client is now. Problems go to Issues." />
       <HeadlinesSection
         headlines={initialSnapshot.dailyHeadlines}
         tasks={initialSnapshot.headlineTasks}
@@ -394,18 +394,90 @@ export function WeeklyBoard({ initialSnapshot }: Props) {
         clients={clientNames}
         clientStages={clientStages}
       />
-      <IdsSection items={weekIds} rocks={rocks} summaries={summaryIndex} />
+
+      <AgendaStep n={5} title="To-dos" minutes={3} note="Last week's to-dos: done or not done." />
       <ActionItemsSection items={weekActions} />
-      {/* Same master pipeline the daily board edits, and in the same slot
-          relative to the to-dos, so the section sits where the team expects. */}
-      <SalesSection deals={salesDeals} />
-      {/* Rocks moved to the end, collapsible per person; Innovation sits below it. */}
-      <RocksTrackerSection rocks={rocks} quarter={QUARTER} summaries={summaryIndex} />
-      <InnovationSection items={innovations} />
-      {/* Forward-looking close: open to-dos + live rocks the team commits to for
-          next week, read out just before rating the meeting. */}
-      <NextWeekSection actionItems={actionItems} rocks={rocks} todayISO={todayLocalISO()} />
+
+      <AgendaStep n={6} title="Issues" minutes={22} note="Pick the top three. Every solved issue ends in a to-do with an owner and a date." />
+      <IdsSection items={weekIds} rocks={rocks} summaries={summaryIndex} />
+
+      <AgendaStep n={7} title="Conclude" minutes={5} note="Recap the new to-dos, then everyone rates. Under 8 says why." />
       <RatingSection ratings={ratings} date={ratingDate} />
+
+      {/* Kept for reference but not part of the 50 minutes. */}
+      <div className="border-t border-border pt-6">
+        <p className="text-xs font-semibold uppercase tracking-wide text-text-muted">Reference, not discussed in the meeting</p>
+      </div>
+      <CompletedSection
+        rocks={rocks}
+        idsItems={idsItems}
+        actionItems={actionItems}
+        weekStartISO={weekStartISO}
+        weekEndISO={weekEndISO}
+      />
+      <NextWeekSection actionItems={actionItems} rocks={rocks} todayISO={todayLocalISO()} />
+      <SalesSection deals={salesDeals} />
+      <InnovationSection items={innovations} />
+    </div>
+  );
+}
+
+// The 50-minute L10, in order. Minutes must add up to MEETING_MINUTES.
+const MEETING_MINUTES = 50;
+const RUN: { n: number; title: string; minutes: number }[] = [
+  { n: 1, title: "Segue", minutes: 2 },
+  { n: 2, title: "Scorecard", minutes: 5 },
+  { n: 3, title: "Rocks", minutes: 5 },
+  { n: 4, title: "Client headlines", minutes: 8 },
+  { n: 5, title: "To-dos", minutes: 3 },
+  { n: 6, title: "Issues", minutes: 22 },
+  { n: 7, title: "Conclude", minutes: 5 }
+];
+
+// The whole meeting on one line, with a running clock so the facilitator can
+// see where the room should be ("Issues starts at 0:23").
+function MeetingRun() {
+  let at = 0;
+  return (
+    <div className="rounded-2xl border border-border bg-surface px-5 py-3 shadow-sm">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h2 className="font-display text-base font-semibold tracking-tight text-text">L10 · {MEETING_MINUTES} minutes</h2>
+        <span className="text-xs text-text-muted">Step 1, segue: one good thing each, personal or work.</span>
+      </div>
+      <ol className="mt-2 flex flex-wrap gap-2">
+        {RUN.map((s) => {
+          const start = at;
+          at += s.minutes;
+          return (
+            <li
+              key={s.n}
+              className={cn(
+                "rounded-md border px-2.5 py-1 text-xs",
+                s.title === "Issues" ? "border-accent/40 bg-accent/5 text-text" : "border-border bg-surface-alt text-text"
+              )}
+            >
+              <span className="font-semibold">{s.n}. {s.title}</span>{" "}
+              <span className="text-text-muted">
+                {s.minutes} min · from 0:{String(start).padStart(2, "0")}
+              </span>
+            </li>
+          );
+        })}
+      </ol>
+    </div>
+  );
+}
+
+// Step marker above each section: number, name, time box, and the one rule
+// that keeps that step from eating the Issues time.
+function AgendaStep({ n, title, minutes, note }: { n: number; title: string; minutes: number; note: string }) {
+  return (
+    <div className="-mb-3 flex flex-wrap items-baseline gap-x-3 gap-y-1 px-1">
+      <span className="text-sm font-semibold text-text">
+        {n}. {title}
+      </span>
+      <span className="rounded-full bg-accent/10 px-2 py-0.5 text-xs font-semibold text-accent">{minutes} min</span>
+      <span className="text-xs text-text-muted">{note}</span>
     </div>
   );
 }
