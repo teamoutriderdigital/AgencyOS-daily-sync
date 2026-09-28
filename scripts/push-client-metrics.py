@@ -13,9 +13,9 @@ Where the numbers come from — read on this machine, never on Vercel:
               (ga4_snapshots, gsc_daily_totals). Credentials come from
               `../Weekly Montly reporting/.env.local` via that repo's
               _report_shared/common.py. SBD, ABS, Supply Velocity, Redstone, TPP.
-  sheet       The Key Healthcare feed Sheet (Apps Script under
-              team@tryagencyos.ai writes GA4 + Search Console daily tabs). It is
-              readable without credentials.
+  sheets      A client's own dashboard feed Sheet, readable without
+              credentials: SBD (published tabs), TPP and Key Healthcare (public
+              gviz). Preferred over the warehouse whenever it is current.
   csv         SBD billed revenue from the Fieldd export the reporting repo
               keeps at clients/smith-bros-mobile-detailing/revenue/YYYY-MM.csv.
               The export's last day is usually partial; it never falls inside
@@ -56,14 +56,49 @@ REPORTING = os.environ.get("REPORTING_DIR") or os.path.abspath(
 # Board client name -> where its numbers live. org_id is the warehouse
 # organizations.id (the same one clients/<slug>/client.json carries in the
 # reporting repo). Names must match the board's clients table exactly.
+SBD_PUB = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRO5FOESHQfGjP6uZhogNMprPhIAfsT9sewDYTsbAjhLE6cUleyBqiVrWa85-6YMuMkqS_I6inNhW1H/pub"
+KEY_SHEET = "1693hg0vYmoX1zHfiDlaF734B-W3pmBvW11UdLHvKm_Y"
+TPP_SHEET = "1hLCaH89BbQ2QPuv1EF7BTtSNEnondxc9BUS2DKsxk1g"
+
+
+def gviz(sheet_id, tab):
+    return (f"https://docs.google.com/spreadsheets/d/{sheet_id}/gviz/tq?"
+            + urllib.parse.urlencode({"tqx": "out:csv", "sheet": tab}))
+
+
+def sheet_pair(search_url, search_cols, analytics_url, analytics_cols):
+    """A client whose dashboard Sheet has a daily Search Console tab and a daily
+    GA4 tab. *_cols map the tab's column header -> our metric."""
+    return [
+        {"url": search_url, "label": "Search Console", "through_key": "organic_through", "fields": search_cols},
+        {"url": analytics_url, "label": "Analytics", "through_key": "traffic_through", "fields": analytics_cols},
+    ]
+
+
+# Board client name -> where its numbers live. Names must match the board's
+# clients table exactly.
+#   warehouse  the Master Dashboard Supabase (org_id = organizations.id). Its
+#              "ops" Google sign-in expired 21 Sep 2026, which froze every
+#              client on it; prefer a client's own dashboard Sheet when it has
+#              a current one.
+#   sheets     the client's dashboard feed Sheet, read without credentials
+#              (published CSV or public gviz), the same data the dashboard shows.
 SOURCES = {
-    "SBD": {"kind": "warehouse", "org_id": "c69f1fdc-a484-4ca7-82cf-870cb1535b18",
-            "revenue_slug": "smith-bros-mobile-detailing"},
+    # SBD dashboard (growtharchon.github.io/sbd-dashboard) published tabs.
+    "SBD": {"kind": "sheets", "revenue_slug": "smith-bros-mobile-detailing", "feeds": sheet_pair(
+        f"{SBD_PUB}?gid=255381674&single=true&output=csv", {"Clicks": "organic_clicks", "Impressions": "impressions"},
+        f"{SBD_PUB}?gid=532718338&single=true&output=csv", {"Sessions": "sessions", "Key events": "key_events"})},
     "ABS Cleaning": {"kind": "warehouse", "org_id": "8dfbcf37-af9f-4444-8470-4d675c2b25da"},
     "Supply Velocity": {"kind": "warehouse", "org_id": "3ff7911b-6887-4e16-bcdc-99bb5353f4c8"},
     "Redstone": {"kind": "warehouse", "org_id": "811e9c11-7d8a-4832-a611-7003d6bffc51"},
-    "TPP Soft Wash": {"kind": "warehouse", "org_id": "ff47071e-1e6d-4a65-bb06-95e4bdd519d2"},
-    "Key Healthcare": {"kind": "sheet", "sheet_id": "1693hg0vYmoX1zHfiDlaF734B-W3pmBvW11UdLHvKm_Y"},
+    # TPP dashboard (team-agencyos/tpp-dashboard) public Sheet.
+    "TPP Soft Wash": {"kind": "sheets", "feeds": sheet_pair(
+        gviz(TPP_SHEET, "GSC_Daily"), {"Clicks": "organic_clicks", "Impressions": "impressions"},
+        gviz(TPP_SHEET, "GA4_Daily"), {"Sessions": "sessions", "Key Events": "key_events"})},
+    # Key Healthcare dashboard feed Sheet (Apps Script under team@tryagencyos.ai).
+    "Key Healthcare": {"kind": "sheets", "feeds": sheet_pair(
+        gviz(KEY_SHEET, "search"), {"Clicks": "organic_clicks", "Impressions": "impressions"},
+        gviz(KEY_SHEET, "analytics"), {"Sessions": "sessions", "Key events": "key_events"})},
 }
 # Clients with numbers but no row on the board's clients table yet. They are
 # appended after the table's own order; adding them to the table is a business
@@ -181,27 +216,38 @@ def warehouse_feeds(sb, org_id, span_start, span_end):
     return out
 
 
-def sheet_csv(sheet_id, tab):
-    url = (f"https://docs.google.com/spreadsheets/d/{sheet_id}/gviz/tq?"
-           + urllib.parse.urlencode({"tqx": "out:csv", "sheet": tab}))
+def csv_rows(url):
+    """Daily rows from a CSV feed, one per date. Some feed tabs repeat a day
+    when their script re-runs; the last copy wins so nothing is counted twice."""
     with urllib.request.urlopen(url, timeout=60) as resp:
         text = resp.read().decode("utf-8", "replace")
-    rows = []
+    by_date = {}
     for r in csv.DictReader(io.StringIO(text)):
         d = parse_date(r.get("Date"))
         if d:
-            rows.append({"date": d, **{k: v for k, v in r.items() if k != "Date"}})
-    return rows
+            by_date[d] = {"date": d, **{k: v for k, v in r.items() if k != "Date"}}
+    return list(by_date.values())
 
 
-def sheet_feeds(sheet_id, span_start, span_end):
+def number(v):
+    try:
+        return float(str(v).replace(",", "").replace("$", "").replace("%", "").strip() or 0)
+    except ValueError:
+        return 0.0
+
+
+def sheet_feeds(specs, span_start, span_end):
+    """The feed's newest date is taken over the whole tab, not the span: GA4
+    leaves out days with no visits, so a quiet week on a small site (TPP) has
+    gaps that are zeros, not a stopped feed."""
     out = []
-    for tab, label, fields, through_key in (
-        ("search", "Search Console", {"Clicks": "organic_clicks", "Impressions": "impressions"}, "organic_through"),
-        ("analytics", "Analytics", {"Sessions": "sessions", "Key events": "key_events"}, "traffic_through"),
-    ):
-        rows = [r for r in sheet_csv(sheet_id, tab) if span_start <= r["date"] <= span_end]
-        out.append(feed(label, through_key, fields, rows))
+    for spec in specs:
+        all_rows = csv_rows(spec["url"])
+        rows = [{"date": r["date"], **{col: number(r.get(col)) for col in spec["fields"]}}
+                for r in all_rows if span_start <= r["date"] <= span_end]
+        f = feed(spec["label"], spec["through_key"], spec["fields"], rows)
+        f["latest"] = max((r["date"] for r in all_rows), default=None)
+        out.append(f)
     return out
 
 
@@ -267,7 +313,7 @@ def build_rows(env, weeks, sb):
                 if src["kind"] == "warehouse":
                     feeds = warehouse_feeds(sb(), src["org_id"], span_start, span_end)
                 else:
-                    feeds = sheet_feeds(src["sheet_id"], span_start, span_end)
+                    feeds = sheet_feeds(src["feeds"], span_start, span_end)
                 kind = src["kind"]
                 if src.get("revenue_slug"):
                     rev = revenue_feed(src["revenue_slug"], span_start, span_end)
@@ -327,10 +373,10 @@ def markdown(rows, week_start, week_end):
         f"| Client | Organic clicks | Impressions | Sessions | Key events | Revenue |",
         "|---|---|---|---|---|---|",
     ]
-    missing = []
+    missing, stalled = [], []
     for r in rows:
         if all(r[m] is None for m in METRICS):
-            missing.append(r["client"])
+            (missing if r.get("note") == "no data connected" else stalled).append(r)
             continue
         cells = []
         for m in METRICS:
@@ -351,8 +397,10 @@ def markdown(rows, week_start, week_end):
     out = [head, ""] + lines
     if notes:
         out += [""] + notes
+    for r in stalled:
+        out += ["", f"{r['client']}: no numbers this week. {r['note'] or 'Nothing for this week yet'}."]
     if missing:
-        out += ["", "No numbers connected yet: " + ", ".join(missing) + "."]
+        out += ["", "No numbers connected yet: " + ", ".join(r["client"] for r in missing) + "."]
     return "\n".join(out)
 
 

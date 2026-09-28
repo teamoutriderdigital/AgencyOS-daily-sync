@@ -9,7 +9,7 @@ import {
   deltaLabel,
   deltaTone,
   fmtMetric,
-  latestWeek,
+  latestPerClient,
   num,
   orderRows,
   splitConnected,
@@ -28,8 +28,8 @@ const TONE: Record<DeltaTone, string> = {
 };
 
 // Last full week's numbers per client, read-only. Rows arrive from
-// `npm run push:client-metrics` on a trusted machine; the board only shows the
-// newest week pushed. Clients with nothing connected are named underneath so
+// `npm run push:client-metrics` on a trusted machine; each client shows its
+// newest complete week, flagged when that is older than the headline week. Clients with nothing connected are named underneath so
 // the gap is a visible fact, not a missing row.
 export function ClientMetricsSection({
   rows,
@@ -38,9 +38,14 @@ export function ClientMetricsSection({
   rows: ClientMetric[];
   clientOrder: string[];
 }) {
+  const { headline, shown } = useMemo(() => latestPerClient(rows), [rows]);
+  const behind = useMemo(
+    () => Object.fromEntries(shown.map((s) => [s.row.client, s.behind])),
+    [shown],
+  );
   const week = useMemo(
-    () => orderRows(latestWeek(rows), clientOrder),
-    [rows, clientOrder],
+    () => orderRows(shown.map((s) => s.row), clientOrder),
+    [shown, clientOrder],
   );
   const { connected, notConnected } = useMemo(
     () => splitConnected(week),
@@ -53,7 +58,7 @@ export function ClientMetricsSection({
       ),
     [rows, connected],
   );
-  const sample = week[0];
+  const sample = headline;
   const checked = useMemo(() => {
     const latest = week.reduce<string | null>(
       (m, r) => (m && m > r.fetched_at ? m : r.fetched_at),
@@ -116,6 +121,11 @@ export function ClientMetricsSection({
                             {n}
                           </div>
                         ))}
+                        {behind[r.client] && (
+                          <div className="text-[11px] text-amber-700">
+                            {behind[r.client]}
+                          </div>
+                        )}
                         {r.note && (
                           <div className="text-[11px] text-text-muted">
                             {r.note}

@@ -89,6 +89,36 @@ export function latestWeek(rows: ClientMetric[]): ClientMetric[] {
   return rows.filter((r) => r.week_start === max);
 }
 
+// Each client's newest week that has numbers. Sources recover at different
+// times (one client's feed can stall while another's is current), so the
+// table shows every client as fresh as it can be rather than holding them all
+// back to the slowest. `behind` explains a row older than the headline week.
+export type ShownMetric = { row: ClientMetric; behind: string | null };
+
+export function latestPerClient(rows: ClientMetric[]): { headline: ClientMetric | null; shown: ShownMetric[] } {
+  const headlineRows = latestWeek(rows);
+  const headline = headlineRows[0] ?? null;
+  if (!headline) return { headline: null, shown: [] };
+  const byClient = new Map<string, ClientMetric[]>();
+  for (const r of rows) byClient.set(r.client, [...(byClient.get(r.client) ?? []), r]);
+  const shown: ShownMetric[] = [];
+  for (const [, list] of byClient) {
+    const sorted = [...list].sort((a, b) => b.week_start.localeCompare(a.week_start));
+    const newest = sorted[0];
+    const withData = sorted.find(hasData);
+    if (!withData || withData.week_start === newest.week_start) {
+      shown.push({ row: newest, behind: null });
+      continue;
+    }
+    const reason = newest.note ? `${newest.note.replace(/, too little of the week to show/g, "")}` : "no data yet";
+    shown.push({
+      row: withData,
+      behind: `Showing ${weekLabel(withData.week_start, withData.week_end)}, the newest complete week. ${weekLabel(newest.week_start, newest.week_end)}: ${reason}.`
+    });
+  }
+  return { headline, shown };
+}
+
 // Same order as the clients table; clients not on it (TPP today) follow, by
 // the pusher's sort_order, then name.
 export function orderRows(rows: ClientMetric[], clientOrder: string[]): ClientMetric[] {

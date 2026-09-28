@@ -102,3 +102,22 @@ test('a week blanked for coverage is skipped, not read as zero', () => {
   const rows = [...six([[100, 95], [110, 100]]), wk('2026-08-24', '2026-08-30', null, null, { note: 'Search Console stopped' })];
   assert.match(clientTrend(rows, 'SV'), /^Organic clicks rose 10% in 17–23 Aug, to 110, the second rise in a row\.$/);
 });
+
+const { latestPerClient } = mod.exports;
+test('each client shows its newest week with numbers, and says why when that is behind', () => {
+  const rows = [
+    row('SBD', { sessions: 1114 }),
+    row('SBD', { id: 'SBD:2026-09-21', week_start: '2026-09-21', week_end: '2026-09-27', sessions: 1200 }),
+    row('ABS Cleaning', { sessions: 981 }),
+    row('ABS Cleaning', { id: 'ABS:2026-09-21', week_start: '2026-09-21', week_end: '2026-09-27', note: 'Analytics stopped Mon 21 Sep, too little of the week to show' }),
+    row('COD', { id: 'COD:2026-09-21', week_start: '2026-09-21', week_end: '2026-09-27', note: 'no data connected' })
+  ];
+  const { headline, shown } = latestPerClient(rows);
+  assert.equal(headline.week_start, '2026-09-21');
+  const by = Object.fromEntries(shown.map((s) => [s.row.client, s]));
+  assert.equal(by.SBD.row.week_start, '2026-09-21'); assert.equal(by.SBD.behind, null);
+  assert.equal(by['ABS Cleaning'].row.week_start, '2026-09-14');
+  assert.equal(by['ABS Cleaning'].behind, 'Showing 14–20 Sep, the newest complete week. 21–27 Sep: Analytics stopped Mon 21 Sep.');
+  assert.equal(by.COD.behind, null);
+  assert.deepEqual(latestPerClient([]), { headline: null, shown: [] });
+});
