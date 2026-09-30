@@ -30,6 +30,10 @@ import {
 } from "@/lib/rocks";
 import { SectionShell } from "./section-shell";
 
+// On the daily/weekly team list but not part of the quarterly rocks (Lianna is
+// an SEO contractor). They still appear if a rock is ever assigned to them.
+const NOT_ON_ROCKS: string[] = ["Lianna"];
+
 // End-of-quarter review. Every rock gets two ticks: Done (unticked = not done)
 // and Carry to next quarter (unticked = drop). Done writes the rock's status;
 // Carry lives in rock_meeting_kv. Both stream over realtime so everyone in the
@@ -156,10 +160,10 @@ export function QuarterlyBoard({
         .filter((d): d is { key: string; draft: DraftRock } => d.draft !== null),
     [kv, target]
   );
-  // One section per current team member (even with no rocks this quarter, so
-  // they can be given drafts), then anyone else who still owns a rock.
+  // One section per team member on quarterly rocks (even with no rocks this
+  // quarter, so they can be given drafts), then anyone else who owns a rock.
   const groups = useMemo(() => {
-    const names: string[] = [...OWNERS];
+    const names: string[] = OWNERS.filter((o) => !NOT_ON_ROCKS.includes(o));
     for (const r of forQuarter) {
       const o = r.owner?.trim() || "Unassigned";
       if (!names.includes(o)) names.push(o);
