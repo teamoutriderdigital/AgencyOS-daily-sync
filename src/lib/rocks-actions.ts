@@ -10,6 +10,9 @@ import {
   reviewCarryKey,
   reviewPrevStatusKey,
   reviewStartedKey,
+  draftPrefix,
+  parseDraft,
+  type DraftRock,
   type RockSeed
 } from "./rocks";
 
@@ -162,9 +165,27 @@ export async function setReviewCarry(rockId: number, quarter: string, carry: boo
   await setMeetingValue(reviewCarryKey(quarter, rockId), { checked: carry });
 }
 
-// Copy every rock ticked "Carry" into the next quarter as a fresh On track rock
-// (same owner, goal, type, department; progress reset). Refuses if the next
-// quarter already has rocks, so a double click can't duplicate them.
+// Save (create or edit) one draft rock for the next quarter.
+export async function saveDraftRock(key: string, draft: DraftRock) {
+  const supabase = createClient();
+  const { error } = await supabase
+    .from("rock_meeting_kv")
+    .upsert({ key, text_value: JSON.stringify(draft) }, { onConflict: "key" });
+  if (error) throw new Error(error.message);
+  revalidateRocks();
+}
+
+export async function deleteDraftRock(key: string) {
+  const supabase = createClient();
+  const { error } = await supabase.from("rock_meeting_kv").delete().eq("key", key);
+  if (error) throw new Error(error.message);
+  revalidateRocks();
+}
+
+// Start the next quarter: copy every rock ticked "Carry" as a fresh On track
+// rock (same owner, goal, type, department; progress reset), then add every
+// titled draft rock. Refuses if the next quarter already has rocks, so a
+// double click can't duplicate them.
 export async function startNextQuarter(quarter: string): Promise<{ nextQuarter: string; carried: number }> {
   const supabase = createClient();
   const target = nextQuarter(quarter);
@@ -176,35 +197,55 @@ export async function startNextQuarter(quarter: string): Promise<{ nextQuarter: 
   if (countErr) throw new Error(countErr.message);
   if ((count ?? 0) > 0) throw new Error(`${target} already has ${count} rocks — nothing copied.`);
 
-  const [{ data: rocks, error: rocksErr }, { data: kv, error: kvErr }] = await Promise.all([
-    supabase.from("rocks").select("*").eq("quarter", quarter).order("sort_order", { ascending: true }),
-    supabase.from("rock_meeting_kv").select("key, checked").like("key", `review:${quarter}:carry:%`)
-  ]);
+  const [{ data: rocks, error: rocksErr }, { data: kv, error: kvErr }, { data: draftRows, error: draftErr }] =
+    await Promise.all([
+      supabase.from("rocks").select("*").eq("quarter", quarter).order("sort_order", { ascending: true }),
+      supabase.from("rock_meeting_kv").select("key, checked").like("key", `review:${quarter}:carry:%`),
+      supabase
+        .from("rock_meeting_kv")
+        .select("key, text_value, updated_at")
+        .like("key", `${draftPrefix(target)}%`)
+        .order("updated_at", { ascending: true })
+    ]);
   if (rocksErr) throw new Error(rocksErr.message);
   if (kvErr) throw new Error(kvErr.message);
+  if (draftErr) throw new Error(draftErr.message);
 
   const carryIds = new Set(
     (kv ?? []).filter((row) => row.checked).map((row) => Number(row.key.split(":").pop()))
   );
-  const payload = (rocks ?? [])
+  const carried = (rocks ?? [])
     .filter((r) => carryIds.has(r.id))
-    .map((r, i) => ({
+    .map((r) => ({
       title: r.title,
       owner: r.owner,
       rock_type: r.rock_type,
       smart: r.smart,
-      department: r.department,
-      quarter: target,
-      status: "On track" as const,
-      sort_order: i
+      department: r.department
     }));
-  if (payload.length === 0) throw new Error("No rocks are ticked Carry — nothing to start.");
+  const drafted = (draftRows ?? [])
+    .map((row) => parseDraft(row))
+    .filter((d): d is DraftRock => !!d && d.title.trim() !== "")
+    .map((d) => ({
+      title: d.title.trim(),
+      owner: d.owner,
+      rock_type: "company" as const,
+      smart: d.smart.trim() || null,
+      department: d.department
+    }));
+  const payload = [...carried, ...drafted].map((r, i) => ({
+    ...r,
+    quarter: target,
+    status: "On track" as const,
+    sort_order: i
+  }));
+  if (payload.length === 0) throw new Error("No rocks are ticked Carry and no drafts have a title — nothing to start.");
 
   const { error: insErr } = await supabase.from("rocks").insert(payload);
   if (insErr) throw new Error(insErr.message);
   await setMeetingValue(reviewStartedKey(quarter), {
     checked: true,
-    text_value: `${payload.length} rocks carried into ${target} on ${new Date().toISOString().slice(0, 10)}`
+    text_value: `${target} started on ${new Date().toISOString().slice(0, 10)} with ${carried.length} carried and ${drafted.length} new rocks`
   });
   revalidateRocks();
   return { nextQuarter: target, carried: payload.length };

@@ -5,18 +5,29 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase-browser";
 import { cn } from "@/lib/utils";
 import { getDepartmentClasses } from "@/lib/department";
-import { setReviewCarry, setReviewDone, startNextQuarter } from "@/lib/rocks-actions";
+import { DEPARTMENTS } from "@/lib/department";
+import { OWNERS } from "@/lib/team";
+import type { Department } from "@/lib/database.types";
+import {
+  deleteDraftRock,
+  saveDraftRock,
+  setReviewCarry,
+  setReviewDone,
+  startNextQuarter
+} from "@/lib/rocks-actions";
 import type { RocksSnapshot } from "@/lib/rocks-server";
 import {
   activeQuarter,
+  draftPrefix,
   nextQuarter,
+  parseDraft,
   quartersOf,
   reviewCarryKey,
   reviewStartedKey,
+  type DraftRock,
   type Rock,
   type RockKv
 } from "@/lib/rocks";
-import { groupByOwner } from "./rocks-tracker-section";
 import { SectionShell } from "./section-shell";
 
 // End-of-quarter review. Every rock gets two ticks: Done (unticked = not done)
@@ -52,7 +63,15 @@ export function QuarterlyBoard({
     const kvChannel = supabase
       .channel("quarterly:kv")
       .on("postgres_changes", { event: "*", schema: "public", table: "rock_meeting_kv" }, (payload) => {
-        if (payload.eventType === "DELETE") return;
+        if (payload.eventType === "DELETE") {
+          const oldKey = (payload.old as { key: string }).key;
+          setKv((prev) => {
+            const next = { ...prev };
+            delete next[oldKey];
+            return next;
+          });
+          return;
+        }
         const row = payload.new as RockKv;
         setKv((prev) => ({ ...prev, [row.key]: row }));
       })
@@ -88,6 +107,35 @@ export function QuarterlyBoard({
     });
   };
 
+  const putKv = (key: string, text_value: string | null) =>
+    setKv((prev) => ({
+      ...prev,
+      [key]: { key, text_value, checked: prev[key]?.checked ?? false, updated_at: new Date().toISOString() }
+    }));
+  const dropKv = (key: string) =>
+    setKv((prev) => {
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  const saveDraft = (key: string, draft: DraftRock) => {
+    const before = kv[key];
+    putKv(key, JSON.stringify(draft));
+    saveDraftRock(key, draft).catch((e) => {
+      if (before) putKv(key, before.text_value);
+      else dropKv(key);
+      window.alert(`Couldn't save: ${e instanceof Error ? e.message : e}`);
+    });
+  };
+  const removeDraft = (key: string) => {
+    const before = kv[key];
+    dropKv(key);
+    deleteDraftRock(key).catch((e) => {
+      if (before) putKv(key, before.text_value);
+      window.alert(`Couldn't delete: ${e instanceof Error ? e.message : e}`);
+    });
+  };
+
   const quarters = useMemo(() => quartersOf(rocks), [rocks]);
   const quarter =
     requestedQuarter && quarters.includes(requestedQuarter) ? requestedQuarter : activeQuarter(rocks);
@@ -97,13 +145,39 @@ export function QuarterlyBoard({
     () => rocks.filter((r) => r.quarter === quarter).sort((a, b) => a.sort_order - b.sort_order),
     [rocks, quarter]
   );
-  const groups = useMemo(() => groupByOwner(forQuarter), [forQuarter]);
+  // Drafts for the next quarter, keyed draft:<target>:<timestamp>-<rand> so key
+  // order is creation order and rows don't jump while being edited.
+  const drafts = useMemo(
+    () =>
+      Object.values(kv)
+        .filter((row) => row.key.startsWith(draftPrefix(target)))
+        .sort((a, b) => a.key.localeCompare(b.key))
+        .map((row) => ({ key: row.key, draft: parseDraft(row) }))
+        .filter((d): d is { key: string; draft: DraftRock } => d.draft !== null),
+    [kv, target]
+  );
+  // One section per current team member (even with no rocks this quarter, so
+  // they can be given drafts), then anyone else who still owns a rock.
+  const groups = useMemo(() => {
+    const names: string[] = [...OWNERS];
+    for (const r of forQuarter) {
+      const o = r.owner?.trim() || "Unassigned";
+      if (!names.includes(o)) names.push(o);
+    }
+    return names.map((owner) => ({
+      owner,
+      rocks: forQuarter.filter((r) => (r.owner?.trim() || "Unassigned") === owner),
+      drafts: drafts.filter((d) => d.draft.owner === owner)
+    }));
+  }, [forQuarter, drafts]);
   const isCarried = (id: number) => kv[reviewCarryKey(quarter, id)]?.checked ?? false;
   const doneCount = forQuarter.filter((r) => r.status === "Done").length;
   const carryCount = forQuarter.filter((r) => isCarried(r.id)).length;
   const donePct = forQuarter.length ? Math.round((doneCount / forQuarter.length) * 100) : 0;
   const started = kv[reviewStartedKey(quarter)];
   const targetHasRocks = rocks.some((r) => r.quarter === target);
+  const draftCount = drafts.filter((d) => d.draft.title.trim() !== "").length;
+  const drafting = !started?.checked && !targetHasRocks;
 
   return (
     <main className="mx-auto max-w-5xl space-y-4 px-4 py-6">
@@ -139,14 +213,10 @@ export function QuarterlyBoard({
         <Stat label="Not done" value={String(forQuarter.length - doneCount)} />
         <Stat label={`Carry to ${target}`} value={String(carryCount)} />
         <Stat label="Drop" value={String(forQuarter.length - carryCount)} />
+        <Stat label={`New ${target.split(" ")[0]} drafts`} value={String(draftCount)} />
       </div>
 
-      {forQuarter.length === 0 ? (
-        <p className="rounded-2xl border border-border bg-surface px-5 py-6 text-center text-sm italic text-text-muted">
-          No rocks for {quarter}.
-        </p>
-      ) : (
-        groups.map((g) => (
+      {groups.map((g) => (
           <SectionShell
             key={g.owner}
             title={g.owner}
@@ -159,6 +229,9 @@ export function QuarterlyBoard({
               </span>
             }
           >
+            {g.rocks.length === 0 && (
+              <p className="px-5 pt-3 text-xs italic text-text-muted">No rocks in {quarter}.</p>
+            )}
             <ul className="divide-y divide-border/50">
               {g.rocks.map((rock) => (
                 <ReviewRow
@@ -171,14 +244,23 @@ export function QuarterlyBoard({
                 />
               ))}
             </ul>
+            {drafting && (
+              <DraftBox
+                owner={g.owner}
+                target={target}
+                drafts={g.drafts}
+                onSave={saveDraft}
+                onRemove={removeDraft}
+              />
+            )}
           </SectionShell>
-        ))
-      )}
+        ))}
 
       <StartNextQuarter
         quarter={quarter}
         target={target}
         carryCount={carryCount}
+        draftCount={draftCount}
         startedNote={started?.checked ? started.text_value : null}
         targetHasRocks={targetHasRocks}
       />
@@ -272,12 +354,14 @@ function StartNextQuarter({
   quarter,
   target,
   carryCount,
+  draftCount,
   startedNote,
   targetHasRocks
 }: {
   quarter: string;
   target: string;
   carryCount: number;
+  draftCount: number;
   startedNote: string | null | undefined;
   targetHasRocks: boolean;
 }) {
@@ -296,7 +380,12 @@ function StartNextQuarter({
   }
 
   const start = () => {
-    if (!window.confirm(`Copy the ${carryCount} rocks ticked "Carry" into ${target}? They start fresh as On track. ${quarter} stays as it is.`)) return;
+    if (
+      !window.confirm(
+        `Start ${target} with ${carryCount} carried rocks and ${draftCount} new draft rocks? They all start as On track. ${quarter} stays as it is.`
+      )
+    )
+      return;
     setError(null);
     startTransition(async () => {
       try {
@@ -310,18 +399,145 @@ function StartNextQuarter({
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-surface px-5 py-4">
       <p className="text-sm text-text-muted">
-        When every rock is ticked, start {target}. The {carryCount} carried rocks are copied over and the weekly board
-        switches to {target}.
+        When every rock is ticked and the drafts are written, start {target}: {carryCount} carried + {draftCount} new
+        rocks. The weekly board then switches to {target}.
       </p>
       <button
         type="button"
         onClick={start}
-        disabled={pending || carryCount === 0}
+        disabled={pending || carryCount + draftCount === 0}
         className="rounded-md bg-accent px-4 py-2 text-sm font-semibold text-text-inverse shadow-sm disabled:opacity-50"
       >
         {pending ? "Starting…" : `Start ${target} →`}
       </button>
       {error && <p className="w-full text-sm text-red-700">{error}</p>}
     </div>
+  );
+}
+
+// Per-person drafting space for next quarter's rocks. Drafts save as you type
+// (on blur) and stay drafts until "Start" turns them into real rocks.
+function DraftBox({
+  owner,
+  target,
+  drafts,
+  onSave,
+  onRemove
+}: {
+  owner: string;
+  target: string;
+  drafts: { key: string; draft: DraftRock }[];
+  onSave: (key: string, draft: DraftRock) => void;
+  onRemove: (key: string) => void;
+}) {
+  const add = () => {
+    const key = `${draftPrefix(target)}${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    onSave(key, { owner, title: "", smart: "", department: null });
+  };
+  return (
+    <div className="border-t border-dashed border-border bg-surface-alt/30 px-5 py-3">
+      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-muted">
+        {target.split(" ")[0]} draft rocks · {owner}
+      </p>
+      {drafts.length > 0 && (
+        <ul className="mb-2 space-y-2">
+          {drafts.map((d) => (
+            <DraftRow key={d.key} draftKey={d.key} draft={d.draft} onSave={onSave} onRemove={onRemove} />
+          ))}
+        </ul>
+      )}
+      <button
+        type="button"
+        onClick={add}
+        className="rounded-md border border-dashed border-border px-3 py-1 text-xs font-medium text-text-muted hover:bg-surface hover:text-text"
+      >
+        + Add {target.split(" ")[0]} rock for {owner}
+      </button>
+    </div>
+  );
+}
+
+function DraftRow({
+  draftKey,
+  draft,
+  onSave,
+  onRemove
+}: {
+  draftKey: string;
+  draft: DraftRock;
+  onSave: (key: string, draft: DraftRock) => void;
+  onRemove: (key: string) => void;
+}) {
+  const [title, setTitle] = useState(draft.title);
+  const [smart, setSmart] = useState(draft.smart);
+  // Another viewer's edit arrives over realtime — take it unless we're mid-edit.
+  const [focused, setFocused] = useState(false);
+  useEffect(() => {
+    if (!focused) {
+      setTitle(draft.title);
+      setSmart(draft.smart);
+    }
+  }, [draft.title, draft.smart, focused]);
+
+  const commit = (patch: Partial<DraftRock>) => {
+    const next = { ...draft, title, smart, ...patch };
+    if (next.title !== draft.title || next.smart !== draft.smart || next.department !== draft.department) {
+      onSave(draftKey, next);
+    }
+  };
+  const input =
+    "w-full rounded-md border border-border bg-surface px-2 py-1 text-sm text-text placeholder:text-text-muted/70 focus:border-accent focus:outline-none";
+
+  return (
+    <li className="flex flex-col gap-1.5 rounded-lg border border-border bg-surface p-2 sm:flex-row sm:items-start">
+      <div className="flex-1 space-y-1.5">
+        <input
+          className={cn(input, "font-medium")}
+          placeholder="Rock title"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          onFocus={() => setFocused(true)}
+          onBlur={() => {
+            setFocused(false);
+            commit({ title });
+          }}
+        />
+        <input
+          className={cn(input, "text-xs")}
+          placeholder="Done when… (one measurable sentence)"
+          value={smart}
+          onChange={(e) => setSmart(e.target.value)}
+          onFocus={() => setFocused(true)}
+          onBlur={() => {
+            setFocused(false);
+            commit({ smart });
+          }}
+        />
+      </div>
+      <div className="flex shrink-0 items-center gap-1.5">
+        <select
+          value={draft.department ?? ""}
+          onChange={(e) => commit({ department: (e.target.value || null) as Department | null })}
+          className="rounded-md border border-border bg-surface px-2 py-1 text-xs text-text"
+          title="Department"
+        >
+          <option value="">Department…</option>
+          {DEPARTMENTS.map((d) => (
+            <option key={d} value={d}>
+              {d}
+            </option>
+          ))}
+        </select>
+        <button
+          type="button"
+          onClick={() => onRemove(draftKey)}
+          className="rounded-md px-2 py-1 text-sm text-text-muted hover:bg-red-50 hover:text-red-700"
+          title="Delete draft"
+          aria-label="Delete draft"
+        >
+          ×
+        </button>
+      </div>
+    </li>
   );
 }

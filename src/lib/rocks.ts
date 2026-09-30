@@ -52,6 +52,22 @@ export function quartersOf(rocks: Pick<Rock, "quarter">[]): string[] {
 export const reviewCarryKey = (quarter: string, rockId: number) => `review:${quarter}:carry:${rockId}`;
 export const reviewPrevStatusKey = (quarter: string, rockId: number) => `review:${quarter}:prev:${rockId}`;
 export const reviewStartedKey = (quarter: string) => `review:${quarter}:started`;
+
+// Draft rocks for the next quarter, written during the review. Each lives in
+// rock_meeting_kv as JSON until "Start" turns it into a real rock.
+export type DraftRock = { owner: string; title: string; smart: string; department: Department | null };
+export const draftPrefix = (targetQuarter: string) => `draft:${targetQuarter}:`;
+
+export function parseDraft(row: { text_value: string | null } | undefined): DraftRock | null {
+  if (!row?.text_value) return null;
+  try {
+    const d = JSON.parse(row.text_value) as Partial<DraftRock>;
+    if (typeof d.owner !== "string") return null;
+    return { owner: d.owner, title: d.title ?? "", smart: d.smart ?? "", department: d.department ?? null };
+  } catch {
+    return null;
+  }
+}
 export const MEETING_DATE = "Thursday 2 July 2026";
 
 // ─── Run of show ────────────────────────────────────────────────────────────
