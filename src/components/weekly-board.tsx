@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import type { ActionItem, IdsItem } from "@/lib/l10";
 import { todayLocalISO } from "@/lib/l10";
 import type { Rock } from "@/lib/rocks";
-import { QUARTER } from "@/lib/rocks";
+import { activeQuarter } from "@/lib/rocks";
 import type { Client } from "@/lib/clients";
 import type { MeetingRating } from "@/lib/daily";
 import type { WeeklySnapshot } from "@/lib/weekly-server";
@@ -48,6 +48,10 @@ export function WeeklyBoard({ initialSnapshot }: Props) {
   const [actionItems, setActionItems] = useState<ActionItem[]>(initialSnapshot.actionItems);
   const [idsItems, setIdsItems] = useState<IdsItem[]>(initialSnapshot.idsItems);
   const [rocks, setRocks] = useState<Rock[]>(initialSnapshot.rocks);
+  // The tracker follows the latest quarter with rocks, so starting a new
+  // quarter from /quarterly moves the board over on its own.
+  const currentQuarter = useMemo(() => activeQuarter(rocks), [rocks]);
+  const currentRocks = useMemo(() => rocks.filter((r) => r.quarter === currentQuarter), [rocks, currentQuarter]);
   const [clients, setClients] = useState<Client[]>(initialSnapshot.clients);
   const [ratings, setRatings] = useState<MeetingRating[]>(initialSnapshot.ratings);
   const [innovations, setInnovations] = useState<Innovation[]>(initialSnapshot.innovations);
@@ -383,7 +387,7 @@ export function WeeklyBoard({ initialSnapshot }: Props) {
       <ClientMetricsSection rows={clientMetrics} clientOrder={clientNames} />
 
       <AgendaStep n={3} title="Rocks" minutes={5} note="On track or off track only. Off track goes to Issues." />
-      <RocksTrackerSection rocks={rocks} quarter={QUARTER} summaries={summaryIndex} />
+      <RocksTrackerSection rocks={rocks} quarter={currentQuarter} summaries={summaryIndex} />
 
       <AgendaStep n={4} title="Client headlines" minutes={8} note="Where each client is now. Problems go to Issues." />
       <HeadlinesSection
@@ -415,7 +419,7 @@ export function WeeklyBoard({ initialSnapshot }: Props) {
         weekStartISO={weekStartISO}
         weekEndISO={weekEndISO}
       />
-      <NextWeekSection actionItems={actionItems} rocks={rocks} todayISO={todayLocalISO()} />
+      <NextWeekSection actionItems={actionItems} rocks={currentRocks} todayISO={todayLocalISO()} />
       <SalesSection deals={salesDeals} />
       <InnovationSection items={innovations} />
     </div>

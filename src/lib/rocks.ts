@@ -12,6 +12,46 @@ export const ROCK_OWNERS = ["Jack", "Daniel", "Darko", "Leo", "Rehan", "Kas", "R
 export const ROCK_TYPES: RockType[] = ["company", "individual"];
 
 export const QUARTER = "Q3 2026";
+
+// ─── Quarters ───────────────────────────────────────────────────────────────
+// Quarters are stored as "Q3 2026". The board follows the latest quarter that
+// has rocks, so starting the next quarter from /quarterly moves the weekly
+// tracker over without a code change. QUARTER stays as the fallback (and the
+// Q3 Finalize board's scope).
+
+function parseQuarter(q: string): { q: number; year: number } | null {
+  const m = q.match(/^Q([1-4])\s+(\d{4})$/);
+  return m ? { q: Number(m[1]), year: Number(m[2]) } : null;
+}
+
+export function quarterRank(q: string): number {
+  const p = parseQuarter(q);
+  return p ? p.year * 4 + p.q : -1;
+}
+
+export function nextQuarter(q: string): string {
+  const p = parseQuarter(q);
+  if (!p) throw new Error(`Unrecognised quarter: ${q}`);
+  return p.q === 4 ? `Q1 ${p.year + 1}` : `Q${p.q + 1} ${p.year}`;
+}
+
+export function activeQuarter(rocks: Pick<Rock, "quarter">[]): string {
+  let best = QUARTER;
+  for (const r of rocks) if (quarterRank(r.quarter) > quarterRank(best)) best = r.quarter;
+  return best;
+}
+
+export function quartersOf(rocks: Pick<Rock, "quarter">[]): string[] {
+  return [...new Set(rocks.map((r) => r.quarter))].sort((a, b) => quarterRank(b) - quarterRank(a));
+}
+
+// End-of-quarter review keys in rock_meeting_kv. "Done" is the rock's own
+// status; the review stores only what the rocks table can't: the carry call,
+// the status to restore if Done is unticked, and whether the next quarter has
+// been started.
+export const reviewCarryKey = (quarter: string, rockId: number) => `review:${quarter}:carry:${rockId}`;
+export const reviewPrevStatusKey = (quarter: string, rockId: number) => `review:${quarter}:prev:${rockId}`;
+export const reviewStartedKey = (quarter: string) => `review:${quarter}:started`;
 export const MEETING_DATE = "Thursday 2 July 2026";
 
 // ─── Run of show ────────────────────────────────────────────────────────────

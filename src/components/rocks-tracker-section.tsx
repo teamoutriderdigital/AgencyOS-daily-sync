@@ -54,7 +54,7 @@ function onTrackPctFor(rocks: Rock[]): number {
 }
 
 // Group by owner, keeping the known roster order first, then any extras.
-function groupByOwner(rocks: Rock[]): { owner: string; rocks: Rock[] }[] {
+export function groupByOwner(rocks: Rock[]): { owner: string; rocks: Rock[] }[] {
   const byOwner = new Map<string, Rock[]>();
   for (const r of rocks) {
     const key = r.owner?.trim() || "Unassigned";

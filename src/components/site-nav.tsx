@@ -11,6 +11,7 @@ const LINKS = [
   { href: "/daily", label: "Daily Sync" },
   { href: "/weekly", label: "Weekly L10" },
   { href: "/strategy", label: "Client Strategy" },
+  { href: "/quarterly", label: "Quarterly" },
   { href: "/rocks", label: "Q3 Rocks" },
   { href: "/admin", label: "Admin" }
 ];
