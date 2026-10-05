@@ -28,10 +28,8 @@ import { SalesSection } from "./sales-section";
 import { ActionItemsSection } from "./action-items-section";
 import { RocksTrackerSection } from "./rocks-tracker-section";
 import { RatingSection } from "./rating-section";
-import { CompletedSection } from "./completed-section";
 import { InnovationSection } from "./innovation-section";
 import { HeadlinesSection } from "./headlines-section";
-import { NextWeekSection } from "./next-week-section";
 import { ClientMetricsSection } from "./client-metrics-section";
 import type { ClientMetric } from "@/lib/client-metrics";
 
@@ -51,7 +49,6 @@ export function WeeklyBoard({ initialSnapshot }: Props) {
   // The tracker follows the latest quarter with rocks, so starting a new
   // quarter from /quarterly moves the board over on its own.
   const currentQuarter = useMemo(() => activeQuarter(rocks), [rocks]);
-  const currentRocks = useMemo(() => rocks.filter((r) => r.quarter === currentQuarter), [rocks, currentQuarter]);
   const [clients, setClients] = useState<Client[]>(initialSnapshot.clients);
   const [ratings, setRatings] = useState<MeetingRating[]>(initialSnapshot.ratings);
   const [innovations, setInnovations] = useState<Innovation[]>(initialSnapshot.innovations);
@@ -65,18 +62,6 @@ export function WeeklyBoard({ initialSnapshot }: Props) {
     () => isoWeekStart(selected.year, selected.week).toISOString().slice(0, 10),
     [selected]
   );
-
-  // Bounds for the Completed section, which filters rocks/IDS/to-dos by
-  // completed_at falling within the selected ISO week.
-  const weekStartISO = useMemo(
-    () => isoWeekStart(selected.year, selected.week).toISOString().slice(0, 10),
-    [selected]
-  );
-  const weekEndISO = useMemo(() => {
-    const d = isoWeekStart(selected.year, selected.week);
-    d.setUTCDate(d.getUTCDate() + 7);
-    return d.toISOString().slice(0, 10);
-  }, [selected]);
 
   // ─── Live master tables (to-dos + IDS + rocks) ────────────────────────────
   useEffect(() => {
@@ -412,14 +397,6 @@ export function WeeklyBoard({ initialSnapshot }: Props) {
       <div className="border-t border-border pt-6">
         <p className="text-xs font-semibold uppercase tracking-wide text-text-muted">Reference, not discussed in the meeting</p>
       </div>
-      <CompletedSection
-        rocks={rocks}
-        idsItems={idsItems}
-        actionItems={actionItems}
-        weekStartISO={weekStartISO}
-        weekEndISO={weekEndISO}
-      />
-      <NextWeekSection actionItems={actionItems} rocks={currentRocks} todayISO={todayLocalISO()} />
       <SalesSection deals={salesDeals} />
       <InnovationSection items={innovations} />
     </div>
