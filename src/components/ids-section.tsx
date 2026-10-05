@@ -15,7 +15,8 @@ import {
 } from "@/lib/l10";
 import { OWNERS } from "@/lib/team";
 import { DEPARTMENTS, getDepartmentClasses, groupByDepartment } from "@/lib/department";
-import { createIdsItem, deleteIdsItem, updateIdsItem, upvoteIdsItem } from "@/lib/l10-actions";
+import { createIdsItem, deleteIdsItem, solveIdsItem, updateIdsItem, upvoteIdsItem } from "@/lib/l10-actions";
+import { defaultTodoDue, solveTodoProblem } from "@/lib/l10-rules";
 import type { Department, IdsStatus, L10Priority, TeamMember } from "@/lib/database.types";
 import type { Rock } from "@/lib/rocks";
 import { summaryKey } from "@/lib/summaries";
@@ -172,6 +173,8 @@ function IdsRow({
 }) {
   const [, startTransition] = useTransition();
   const [draftTitle, setDraftTitle] = useState(boardTitle(item.issue));
+  // Rule: an issue only closes with a to-do (owner + date within a week).
+  const [closing, setClosing] = useState(false);
   const linkedRock = item.rock_id != null ? rocks.find((r) => r.id === item.rock_id) : undefined;
   return (
     <div>
@@ -256,9 +259,14 @@ function IdsRow({
         </select>
         <select
           value={item.status}
-          onChange={(e) =>
-            startTransition(() => updateIdsItem(item.id, { status: e.target.value as IdsStatus }))
-          }
+          onChange={(e) => {
+            const next = e.target.value as IdsStatus;
+            if (next === "Solved") {
+              setClosing(true);
+              return;
+            }
+            startTransition(() => updateIdsItem(item.id, { status: next }));
+          }}
           className={cn(
             "cursor-pointer rounded-full border px-2 py-0.5 text-xs font-semibold",
             getIdsStatusClasses(item.status)
@@ -345,13 +353,9 @@ function IdsRow({
         </div>
         <button
           type="button"
-          onClick={() => {
-            if (confirm("Mark this issue solved? (archives it)")) {
-              startTransition(() => updateIdsItem(item.id, { archived: true, status: "Solved" }));
-            }
-          }}
+          onClick={() => setClosing(true)}
           className="text-xs font-medium text-text-muted hover:text-green-600"
-          title="Solved — archive this issue"
+          title="Solve: add the to-do that comes out of it, then it archives"
         >
           ✓ Solved
         </button>
@@ -368,6 +372,7 @@ function IdsRow({
           ✕
         </button>
       </div>
+      {closing && <SolveForm item={item} onClose={() => setClosing(false)} />}
       {expanded && (
         <div className="border-t border-border/30 bg-surface-alt/20 px-5 py-3">
           <div className="grid gap-3 lg:grid-cols-3">
@@ -510,7 +515,8 @@ function NewIdsRow({
         className="rounded-md border border-border bg-surface px-2 py-1 text-xs text-text"
         title="Status"
       >
-        {IDS_STATUSES.map((s) => (
+        {/* A new issue cannot start Solved: solving goes through the to-do close-out. */}
+        {IDS_STATUSES.filter((s) => s !== "Solved").map((s) => (
           <option key={s} value={s}>
             {s}
           </option>
@@ -591,4 +597,80 @@ function PlaneRetention({ issueId }: { issueId: number }) {
     </div>
     {error && <p role="alert" className="text-xs text-red-700">{error}</p>}
   </form>;
+}
+
+// Close-out for an issue: the to-do that comes out of it, with an owner and a
+// date inside a week. The issue is marked Solved only when this saves.
+function SolveForm({ item, onClose }: { item: IdsItem; onClose: () => void }) {
+  const today = boardToday();
+  const [todo, setTodo] = useState("");
+  const [assignee, setAssignee] = useState<TeamMember | "">(item.owner ?? "");
+  const [due, setDue] = useState(defaultTodoDue(today));
+  const [error, setError] = useState("");
+  const [pending, startTransition] = useTransition();
+  const save = () => {
+    const input = { item: todo, assignee: assignee || null, due_date: due || null };
+    const problem = solveTodoProblem(input, today);
+    if (problem) {
+      setError(problem);
+      return;
+    }
+    startTransition(async () => {
+      try {
+        await solveIdsItem(item.id, input);
+        onClose();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Could not save.");
+      }
+    });
+  };
+  return (
+    <div className="border-t border-green-200 bg-green-50/60 px-5 py-3">
+      <p className="mb-2 text-xs font-semibold text-green-800">Solving this issue. What is the to-do that comes out of it?</p>
+      <div className="flex flex-wrap items-center gap-2">
+        <input
+          autoFocus
+          value={todo}
+          onChange={(e) => setTodo(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && save()}
+          placeholder="e.g. Send Eric the legal pages for sign-off"
+          className="min-w-[16rem] flex-1 rounded-md border border-border bg-surface px-2 py-1 text-sm text-text"
+        />
+        <select
+          value={assignee}
+          onChange={(e) => setAssignee(e.target.value as TeamMember | "")}
+          className="rounded-md border border-border bg-surface px-2 py-1 text-xs text-text"
+          title="Owner"
+        >
+          <option value="">Owner</option>
+          {OWNERS.map((o) => (
+            <option key={o} value={o}>
+              {o}
+            </option>
+          ))}
+        </select>
+        <input
+          type="date"
+          value={due}
+          min={today}
+          max={defaultTodoDue(today)}
+          onChange={(e) => setDue(e.target.value)}
+          className="rounded-md border border-border bg-surface px-2 py-1 text-xs text-text"
+          title="Due within a week"
+        />
+        <button
+          type="button"
+          onClick={save}
+          disabled={pending}
+          className="rounded-md bg-green-600 px-3 py-1 text-xs font-semibold text-white hover:bg-green-700 disabled:opacity-50"
+        >
+          {pending ? "Saving…" : "Solve and add to-do"}
+        </button>
+        <button type="button" onClick={onClose} className="text-xs text-text-muted hover:text-text">
+          Cancel
+        </button>
+      </div>
+      {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
+    </div>
+  );
 }

@@ -1,0 +1,10 @@
+[Unit]
+Description=L10 board: push last full week's client numbers before the Monday meeting
+
+[Service]
+Type=oneshot
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+WorkingDirectory=/home/daniel/Downloads/Claude Code OD/L10 for daily sync AgencyOS/daily-sync-board
+# Reads .env.local here and the reporting repo's .env.local; writes only the
+# client_metrics table the /weekly board reads.
+ExecStart=/usr/bin/python3 scripts/push-client-metrics.py --write

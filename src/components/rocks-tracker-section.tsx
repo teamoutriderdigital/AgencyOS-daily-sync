@@ -4,6 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import { cn } from "@/lib/utils";
 import { ROCK_OWNERS, type Rock } from "@/lib/rocks";
 import { setRockStatus } from "@/lib/rocks-actions";
+import { sendRockToIssues } from "@/lib/l10-actions";
 import type { RockStatus } from "@/lib/database.types";
 import { getDepartmentClasses } from "@/lib/department";
 import { summaryKey } from "@/lib/summaries";
@@ -176,7 +177,14 @@ function RockCard({ rock, summaries }: { rock: Rock; summaries: Map<string, Item
         </div>
         <select
           value={rock.status}
-          onChange={(e) => startTransition(() => setRockStatus(rock.id, e.target.value as RockStatus))}
+          onChange={(e) => {
+            const next = e.target.value as RockStatus;
+            startTransition(async () => {
+              await setRockStatus(rock.id, next);
+              // Rule: off track is not discussed here, it goes to Issues.
+              if (next === "Off track") await sendRockToIssues({ id: rock.id, title: rock.title, owner: rock.owner });
+            });
+          }}
           className={cn(
             "shrink-0 cursor-pointer rounded-full border px-2 py-0.5 text-xs font-semibold",
             statusClasses(rock.status)
@@ -202,6 +210,20 @@ function RockCard({ rock, summaries }: { rock: Rock; summaries: Map<string, Item
             {Math.round(progress * 100)}%
           </span>
         </div>
+      )}
+      {rock.status === "Off track" && (
+        <button
+          type="button"
+          onClick={() =>
+            startTransition(async () => {
+              await sendRockToIssues({ id: rock.id, title: rock.title, owner: rock.owner });
+            })
+          }
+          className="mt-1 text-[11px] font-medium text-red-700 hover:underline"
+          title="Adds an issue linked to this rock, unless one is already open"
+        >
+          Off track: discuss in Issues
+        </button>
       )}
       {rock.smart && <p className="mt-1 line-clamp-2 text-xs text-text-muted">{rock.smart}</p>}
       {summaries.get(summaryKey("rock", rock.id)) && (

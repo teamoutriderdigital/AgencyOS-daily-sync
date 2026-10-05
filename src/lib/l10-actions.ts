@@ -4,6 +4,9 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "./supabase-server";
 import type { Department, IdsStatus, L10Priority, TeamMember } from "./database.types";
 import { CANONICAL_IDS } from "./reconcile-ids";
+import { boardToday } from "./subprojects";
+import { OWNERS } from "./team";
+import { offTrackIssueTitle, ratingIssueTitle, ratingNeedsReason, solveTodoProblem, solvedNote } from "./l10-rules";
 
 function revalidateDaily() {
   // To-dos and IDS are shared master state shown on both the daily and weekly
@@ -116,6 +119,79 @@ export async function deleteIdsItem(id: number) {
   const { error } = await supabase.from("ids_items").delete().eq("id", id);
   if (error) throw new Error(error.message);
   revalidateDaily();
+}
+
+// Rule 1: an issue only closes with a to-do behind it. Creates the to-do, then
+// marks the issue Solved and archives it, recording the to-do in its notes.
+export async function solveIdsItem(
+  id: number,
+  todo: { item: string; assignee: TeamMember | null; due_date: string | null }
+) {
+  const problem = solveTodoProblem(todo, boardToday());
+  if (problem) throw new Error(problem);
+  const supabase = createClient();
+  const { data: issue, error: readErr } = await supabase.from("ids_items").select("solve").eq("id", id).single();
+  if (readErr) throw new Error(readErr.message);
+  const { error: todoErr } = await supabase.from("action_items").insert({
+    item: todo.item.trim(),
+    assignee: todo.assignee,
+    due_date: todo.due_date
+  });
+  if (todoErr) throw new Error(todoErr.message);
+  const note = solvedNote({ item: todo.item, assignee: todo.assignee as string, due_date: todo.due_date as string });
+  const { error } = await supabase
+    .from("ids_items")
+    .update({
+      status: "Solved",
+      archived: true,
+      completed_at: new Date().toISOString(),
+      solve: issue?.solve ? `${issue.solve}\n${note}` : note
+    })
+    .eq("id", id);
+  if (error) throw new Error(error.message);
+  revalidateDaily();
+}
+
+// Rule 2: a rating under 8 comes with a reason, filed as an issue owned by the
+// person who gave it, so next week's meeting opens with it.
+export async function fileRatingReason(input: { member: TeamMember; rating: number; reason: string }) {
+  if (!ratingNeedsReason(input.rating)) throw new Error("Only ratings under 8 need a reason.");
+  if (!input.reason.trim()) throw new Error("Say why.");
+  const supabase = createClient();
+  const { error } = await supabase.from("ids_items").insert({
+    issue: ratingIssueTitle(input.member, input.rating, input.reason),
+    owner: input.member,
+    status: "Not started",
+    identify: input.reason.trim(),
+    client_internal: []
+  });
+  if (error) throw new Error(error.message);
+  revalidateDaily();
+}
+
+// Rule 3: an off-track rock becomes an issue linked to it. Idempotent: if the
+// rock already has an open issue, nothing new is created.
+export async function sendRockToIssues(rock: { id: number; title: string; owner: string | null }) {
+  const supabase = createClient();
+  const { data: open, error: readErr } = await supabase
+    .from("ids_items")
+    .select("id")
+    .eq("rock_id", rock.id)
+    .eq("archived", false)
+    .neq("status", "Solved")
+    .limit(1);
+  if (readErr) throw new Error(readErr.message);
+  if (open && open.length > 0) return { created: false };
+  const { error } = await supabase.from("ids_items").insert({
+    issue: offTrackIssueTitle(rock.title),
+    owner: rock.owner && (OWNERS as string[]).includes(rock.owner) ? (rock.owner as TeamMember) : null,
+    status: "Not started",
+    rock_id: rock.id,
+    client_internal: []
+  });
+  if (error) throw new Error(error.message);
+  revalidateDaily();
+  return { created: true };
 }
 
 // Atomic +1 upvote (via the upvote_ids_item RPC so concurrent votes don't race).

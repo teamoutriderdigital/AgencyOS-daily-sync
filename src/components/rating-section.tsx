@@ -1,9 +1,11 @@
 "use client";
 
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 import { cn } from "@/lib/utils";
 import { OWNERS } from "@/lib/team";
 import { setMeetingRating } from "@/lib/daily-actions";
+import { fileRatingReason } from "@/lib/l10-actions";
+import { RATING_BAR, ratingNeedsReason } from "@/lib/l10-rules";
 import type { MeetingRating } from "@/lib/daily";
 import type { TeamMember } from "@/lib/database.types";
 import { SectionShell } from "./section-shell";
@@ -13,7 +15,17 @@ const SCORES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] as const;
 // Meeting rating — the L10 close-out. Each member rates the meeting 1–10; the
 // header shows how many have rated and the running average. Anyone can set a
 // score (handy for whoever runs the standup). Date-scoped, one row per member.
-export function RatingSection({ ratings, date }: { ratings: MeetingRating[]; date: string }) {
+// `filedReasons` are the open issue titles, so a reason already filed this week
+// is not asked for again after a reload.
+export function RatingSection({
+  ratings,
+  date,
+  filedReasons = []
+}: {
+  ratings: MeetingRating[];
+  date: string;
+  filedReasons?: string[];
+}) {
   const byMember = new Map(ratings.map((r) => [r.member, r.rating]));
   const given = OWNERS.map((m) => byMember.get(m)).filter((v): v is number => v != null);
   const avg = given.length ? given.reduce((a, b) => a + b, 0) / given.length : null;
@@ -43,7 +55,13 @@ export function RatingSection({ ratings, date }: { ratings: MeetingRating[]; dat
     >
       <div className="divide-y divide-border/50">
         {OWNERS.map((member) => (
-          <RatingRow key={member} member={member} score={byMember.get(member) ?? null} date={date} />
+          <RatingRow
+            key={member}
+            member={member}
+            score={byMember.get(member) ?? null}
+            date={date}
+            filed={filedReasons.some((t) => t.startsWith(`Meeting rated ${byMember.get(member)} by ${member}:`))}
+          />
         ))}
       </div>
     </SectionShell>
@@ -53,13 +71,34 @@ export function RatingSection({ ratings, date }: { ratings: MeetingRating[]; dat
 function RatingRow({
   member,
   score,
-  date
+  date,
+  filed
 }: {
   member: TeamMember;
   score: number | null;
   date: string;
+  filed: boolean;
 }) {
   const [pending, startTransition] = useTransition();
+  const [reason, setReason] = useState("");
+  const [sent, setSent] = useState(false);
+  const [error, setError] = useState("");
+  const needsReason = ratingNeedsReason(score) && !filed && !sent;
+  const fileReason = () => {
+    if (!reason.trim()) {
+      setError("Say why.");
+      return;
+    }
+    startTransition(async () => {
+      try {
+        await fileRatingReason({ member, rating: score as number, reason });
+        setSent(true);
+        setError("");
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Could not save.");
+      }
+    });
+  };
 
   const set = (next: number) => {
     // Clicking the current score again clears it.
@@ -68,7 +107,7 @@ function RatingRow({
   };
 
   return (
-    <div className="flex items-center gap-3 px-5 py-2.5">
+    <div className="flex flex-wrap items-center gap-3 px-5 py-2.5">
       <span className="w-20 flex-shrink-0 text-sm font-semibold text-text">{member}</span>
       <div className={cn("flex flex-wrap gap-1", pending && "opacity-60")}>
         {SCORES.map((s) => {
@@ -92,6 +131,29 @@ function RatingRow({
         })}
       </div>
       {score == null && <span className="text-xs italic text-text-muted">not rated</span>}
+      {needsReason && (
+        <div className="flex min-w-[16rem] flex-1 items-center gap-2">
+          <input
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && fileReason()}
+            placeholder={`Under ${RATING_BAR}: what would have made it a 10?`}
+            className="flex-1 rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-xs text-text"
+          />
+          <button
+            type="button"
+            onClick={fileReason}
+            disabled={pending}
+            className="rounded-md border border-amber-300 bg-surface px-2 py-1 text-xs font-semibold text-amber-700 hover:bg-amber-50 disabled:opacity-50"
+          >
+            Add to issues
+          </button>
+          {error && <span className="text-xs text-red-600">{error}</span>}
+        </div>
+      )}
+      {ratingNeedsReason(score) && (filed || sent) && (
+        <span className="text-xs text-text-muted">Reason filed in issues</span>
+      )}
     </div>
   );
 }

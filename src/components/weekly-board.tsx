@@ -406,7 +406,7 @@ export function WeeklyBoard({ initialSnapshot }: Props) {
       <IdsSection items={weekIds} rocks={rocks} summaries={summaryIndex} />
 
       <AgendaStep n={7} title="Conclude" minutes={5} note="Recap the new to-dos, then everyone rates. Under 8 says why." />
-      <RatingSection ratings={ratings} date={ratingDate} />
+      <RatingSection ratings={ratings} date={ratingDate} filedReasons={idsItems.map((i) => i.issue)} />
 
       {/* Kept for reference but not part of the 50 minutes. */}
       <div className="border-t border-border pt-6">
