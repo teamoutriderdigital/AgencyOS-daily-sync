@@ -131,3 +131,24 @@ test('sparkline series is oldest first, capped at six weeks, and skips blanked w
   assert.equal(points[0].label, '10–16 Aug');
   assert.equal(trendSeries([row('KEY', { sessions: 10 })], 'KEY').measure, 'Sessions');
 });
+
+const { tableSummary } = mod.exports;
+test('table summary reads the whole table in one sentence, naming clients that are a week behind', () => {
+  const cur = (client, now, prev, extra = {}) => row(client, { id: `${client}:28`, week_start: '2026-09-28', week_end: '2026-10-04', organic_clicks: now, organic_clicks_prev: prev, ...extra });
+  const late = (client, now, prev) => row(client, { id: `${client}:21`, week_start: '2026-09-21', week_end: '2026-09-27', organic_clicks: now, organic_clicks_prev: prev });
+  // The 5 Oct board: four risers; Key Healthcare's Search Console stopped, so
+  // only sessions arrived this week and its clicks read from the week before;
+  // TPP is too small to count.
+  assert.equal(
+    tableSummary([cur('Redstone', 216, 204), cur('SBD', 135, 112), cur('ABS Cleaning', 58, 53), cur('Supply Velocity', 53, 43),
+      late('Key Healthcare', 76, 90), cur('Key Healthcare', null, null, { sessions: 400, sessions_prev: 470 }), late('TPP Soft Wash', 2, 1)]),
+    "Organic clicks rose for all 4 clients in 28 Sep – 4 Oct, led by Supply Velocity (+23%) and SBD (+21%); Key Healthcare's newest full week, 21–27 Sep, fell 16%."
+  );
+  assert.equal(
+    tableSummary([cur('Redstone', 216, 204), cur('SBD', 100, 125), cur('ABS Cleaning', 50, 55)]),
+    'Organic clicks rose for 1 of 3 clients in 28 Sep – 4 Oct, led by Redstone (+6%), while SBD (-20%) and ABS Cleaning (-9%) fell.'
+  );
+  assert.equal(tableSummary([cur('SBD', 100, 125), cur('ABS Cleaning', 50, 55)]), 'Organic clicks fell for both clients in 28 Sep – 4 Oct, worst SBD (-20%).');
+  assert.equal(tableSummary([cur('TPP Soft Wash', 2, 1)]), null);
+  assert.equal(tableSummary([]), null);
+});

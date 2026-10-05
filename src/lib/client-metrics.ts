@@ -258,3 +258,69 @@ export function trendSeries(rows: ClientMetric[], client: string, maxWeeks = 6):
     .map((r) => ({ label: weekLabel(r.week_start, r.week_end), value: num(r[key]) as number }));
   return { measure: useClicks ? "Organic clicks" : "Sessions", points };
 }
+
+// ─── One-line read of the whole table ────────────────────────────────────────
+// A single sentence above the table: how many current clients rose, who led,
+// who fell, and any client whose newest full week is older than the headline
+// week. Tiny numbers are left out, as in the per-client line, because their
+// percentages are noise.
+type Move = { client: string; pct: number; label: string; clicks: boolean };
+
+function listNames(names: string[]): string {
+  if (names.length <= 1) return names.join("");
+  return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+}
+
+export function tableSummary(rows: ClientMetric[]): string | null {
+  const headline = latestWeek(rows)[0];
+  if (!headline) return null;
+  const current: Move[] = [];
+  const lagging: Move[] = [];
+  const clients = [...new Set(rows.map((r) => r.client))];
+  for (const client of clients) {
+    // Same measure as the client's trend line: clicks whenever it has Search
+    // Console, so a week where only Analytics arrived doesn't swap measures.
+    const mine = rows.filter((r) => r.client === client).sort((a, b) => b.week_start.localeCompare(a.week_start));
+    const clicks = mine.some((r) => num(r.organic_clicks) != null);
+    const key: MetricKey = clicks ? "organic_clicks" : "sessions";
+    const row = mine.find((r) => num(r[key]) != null && num(r[`${key}_prev`]) != null);
+    if (!row) continue;
+    const now = num(row[key]) as number;
+    const prev = num(row[`${key}_prev`]) as number;
+    if (now < SMALL && prev < SMALL) continue;
+    const p = pct(now, prev);
+    if (p == null) continue;
+    const move = { client, pct: p, label: weekLabel(row.week_start, row.week_end), clicks };
+    (row.week_start === headline.week_start ? current : lagging).push(move);
+  }
+  if (current.length === 0 && lagging.length === 0) return null;
+
+  const all = [...current, ...lagging];
+  const noun = all.every((m) => m.clicks) ? "Organic clicks" : all.every((m) => !m.clicks) ? "Sessions" : "Search traffic";
+  const signed = (m: Move) => `${m.client} (${m.pct > 0 ? "+" : "-"}${Math.abs(m.pct)}%)`;
+  const parts: string[] = [];
+
+  if (current.length > 0) {
+    const label = weekLabel(headline.week_start, headline.week_end);
+    const up = current.filter((m) => m.pct > 0).sort((a, b) => b.pct - a.pct);
+    const down = current.filter((m) => m.pct < 0).sort((a, b) => a.pct - b.pct);
+    const n = current.length;
+    const everyone = n === 1 ? current[0].client : n === 2 ? "both clients" : `all ${n} clients`;
+    let head: string;
+    if (up.length === n) head = `${noun} rose for ${everyone} in ${label}`;
+    else if (down.length === n) head = `${noun} fell for ${everyone} in ${label}`;
+    else head = `${noun} rose for ${up.length} of ${n} clients in ${label}`;
+    if (up.length > 0 && n > 1) head += `, led by ${listNames(up.slice(0, 2).map(signed))}`;
+    if (down.length > 0 && up.length > 0) head += `, while ${listNames(down.slice(0, 2).map(signed))} fell`;
+    else if (down.length > 1) head += `, worst ${signed(down[0])}`;
+    parts.push(head);
+  }
+
+  for (const m of lagging) {
+    const moved = m.pct === 0 ? "held level" : `${m.pct > 0 ? "rose" : "fell"} ${Math.abs(m.pct)}%`;
+    parts.push(`${m.client}'s newest full week, ${m.label}, ${moved}`);
+  }
+
+  const sentence = parts.join("; ");
+  return `${sentence.charAt(0).toUpperCase()}${sentence.slice(1)}.`;
+}
