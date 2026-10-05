@@ -152,3 +152,8 @@ test('table summary reads the whole table in one sentence, naming clients that a
   assert.equal(tableSummary([cur('TPP Soft Wash', 2, 1)]), null);
   assert.equal(tableSummary([]), null);
 });
+
+const { visibleRows } = mod.exports;
+test('hidden clients drop off the board, matched without case', () => {
+  assert.deepEqual(visibleRows([row('SBD'), row('TPP Soft Wash'), row('tpp soft wash')]).map((r) => r.client), ['SBD']);
+});

@@ -16,6 +16,7 @@ import {
   orderRows,
   splitConnected,
   tableSummary,
+  visibleRows,
   throughNotes,
   weekLabel,
   type ClientMetric,
@@ -123,12 +124,13 @@ function Sparkline({
 // newest complete week, flagged when that is older than the headline week. Clients with nothing connected are named underneath so
 // the gap is a visible fact, not a missing row.
 export function ClientMetricsSection({
-  rows,
+  rows: allRows,
   clientOrder,
 }: {
   rows: ClientMetric[];
   clientOrder: string[];
 }) {
+  const rows = useMemo(() => visibleRows(allRows), [allRows]);
   const { headline, shown } = useMemo(() => latestPerClient(rows), [rows]);
   const behind = useMemo(
     () => Object.fromEntries(shown.map((s) => [s.row.client, s.behind])),

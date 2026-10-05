@@ -5,6 +5,15 @@ import type { Tables } from "./database.types";
 // tests/client-metrics.test.cjs all share one set of rules.
 export type ClientMetric = Tables<"client_metrics">;
 
+// Clients the pusher still writes but the board leaves out for now. Their rows
+// stay in client_metrics, so taking a name off this list brings them back.
+export const HIDDEN_CLIENTS = ["TPP Soft Wash"];
+
+export function visibleRows(rows: ClientMetric[]): ClientMetric[] {
+  const hidden = new Set(HIDDEN_CLIENTS.map((c) => c.toLowerCase()));
+  return rows.filter((r) => !hidden.has(r.client.toLowerCase()));
+}
+
 export type MetricKey = "organic_clicks" | "impressions" | "sessions" | "key_events" | "revenue";
 export type ThroughKey = "organic_through" | "traffic_through" | "revenue_through";
 
