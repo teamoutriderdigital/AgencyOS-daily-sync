@@ -386,10 +386,7 @@ export function WeeklyBoard({ initialSnapshot }: Props) {
       <AgendaStep n={2} title="Scorecard" minutes={5} note="Read the numbers. Anything off becomes an issue, not a discussion." />
       <ClientMetricsSection rows={clientMetrics} clientOrder={clientNames} />
 
-      <AgendaStep n={3} title="Rocks" minutes={5} note="On track or off track only. Off track goes to Issues." />
-      <RocksTrackerSection rocks={rocks} quarter={currentQuarter} summaries={summaryIndex} />
-
-      <AgendaStep n={4} title="Client headlines" minutes={8} note="Where each client is now. Problems go to Issues." />
+      <AgendaStep n={3} title="Client headlines" minutes={8} note="Where each client is now. Problems go to Issues." />
       <HeadlinesSection
         headlines={initialSnapshot.dailyHeadlines}
         tasks={initialSnapshot.headlineTasks}
@@ -399,11 +396,14 @@ export function WeeklyBoard({ initialSnapshot }: Props) {
         clientStages={clientStages}
       />
 
+      <AgendaStep n={4} title="Issues" minutes={22} note="Pick the top three. Every solved issue ends in a to-do with an owner and a date." />
+      <IdsSection items={weekIds} rocks={rocks} summaries={summaryIndex} />
+
       <AgendaStep n={5} title="To-dos" minutes={3} note="Last week's to-dos: done or not done." />
       <ActionItemsSection items={weekActions} />
 
-      <AgendaStep n={6} title="Issues" minutes={22} note="Pick the top three. Every solved issue ends in a to-do with an owner and a date." />
-      <IdsSection items={weekIds} rocks={rocks} summaries={summaryIndex} />
+      <AgendaStep n={6} title="Rocks" minutes={5} note="On track or off track only. Off track goes to Issues." />
+      <RocksTrackerSection rocks={rocks} quarter={currentQuarter} summaries={summaryIndex} />
 
       <AgendaStep n={7} title="Conclude" minutes={5} note="Recap the new to-dos, then everyone rates. Under 8 says why." />
       <RatingSection ratings={ratings} date={ratingDate} filedReasons={idsItems.map((i) => i.issue)} />
@@ -431,15 +431,15 @@ const MEETING_MINUTES = 50;
 const RUN: { n: number; title: string; minutes: number }[] = [
   { n: 1, title: "Segue", minutes: 2 },
   { n: 2, title: "Scorecard", minutes: 5 },
-  { n: 3, title: "Rocks", minutes: 5 },
-  { n: 4, title: "Client headlines", minutes: 8 },
+  { n: 3, title: "Client headlines", minutes: 8 },
+  { n: 4, title: "Issues", minutes: 22 },
   { n: 5, title: "To-dos", minutes: 3 },
-  { n: 6, title: "Issues", minutes: 22 },
+  { n: 6, title: "Rocks", minutes: 5 },
   { n: 7, title: "Conclude", minutes: 5 }
 ];
 
 // The whole meeting on one line, with a running clock so the facilitator can
-// see where the room should be ("Issues starts at 0:23").
+// see where the room should be ("Issues starts at 0:15").
 function MeetingRun() {
   let at = 0;
   return (

@@ -46,7 +46,7 @@ const { buildSubprojectRows, buildClientCard, rowToDb, boardToday, CLIENT_PROJEC
 // daily_headlines.owner / headline_tasks.owner are the team_member enum, so a
 // client owned by someone outside it (Leo, Darko) is left unowned on purpose —
 // that gap is the decision the meeting owes, not something to paper over.
-const TEAM = ['Jack', 'Daniel', 'Leonardo', 'Rehan', 'Kas', 'Rasika', 'Mubshar', 'Lianna'];
+const TEAM = ['Jack', 'Daniel', 'Leonardo', 'Rehan', 'Kas', 'Rasika', 'Mubshar', 'Lianna', 'Anna'];
 
 function env() {
   const file = path.join(ROOT, '.env.local');
